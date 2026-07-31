@@ -1,0 +1,50 @@
+# docker-compose for Simple Live Server (Node.js)
+
+version: '3.8'
+
+services:
+  simple-live-server:
+    build: .
+    container_name: simple-live-server
+    ports:
+      - "8089:8089"
+    environment:
+      - NODE_ENV=production
+      - PORT=8089
+      - HOST=0.0.0.0
+      - ENABLE_LOG=true
+      - MAX_DANMAKU_CONNECTIONS=100
+      - MAX_STREAM_SESSIONS=20
+      - STREAM_DIR=/tmp/live_stream
+      - STREAM_IDLE_TIMEOUT=30
+      # 演示模式（开启后只显示 local 平台，用于 Apple Store 审核）
+      - DEMO_MODE=false
+      # 本地视频文件目录
+      - LOCAL_VIDEO_DIR=/data/videos
+      # 本地数据 JSON 文件路径（为空则自动扫描目录）
+      # - LOCAL_DATA_FILE=/data/local_data.json
+      # 封面图片存储目录（演示模式截取视频第一帧）
+      - COVER_DIR=/tmp/live_stream/covers
+      # 同步数据 SQLite 数据库路径（关注/观看记录等持久化）
+      - SYNC_DB_PATH=/data/sync_data.db
+      # B站 Cookie（可选，用于登录态获取更高画质）
+      # - BILIBILI_COOKIE=your_bilibili_cookie_here
+      # 抖音 Cookie（可选）
+      # - DOUYIN_COOKIE=your_douyin_cookie_here
+    volumes:
+      - stream_data:/tmp/live_stream
+      # 同步数据持久化卷（SQLite 数据库）
+      - sync_data:/data
+      # 挂载本地视频目录（只读，用于 local 平台演示流）
+      - ./videos:/data/videos:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8089/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  stream_data:
+  sync_data:
