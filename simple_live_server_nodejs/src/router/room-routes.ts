@@ -6,7 +6,13 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { LiveSiteService } from '../service/live-site-service.js';
-import { sendJson, sendBadRequest, sendError } from './route-helpers.js';
+import { FfmpegStreamManager } from '../service/ffmpeg-stream-manager.js';
+import { sendJson, sendBadRequest, sendCustomError, sendError } from './route-helpers.js';
+
+export interface RoomRouterOptions {
+  service: LiveSiteService;
+  streamManager: FfmpegStreamManager;
+}
 
 /**
  * 注册房间/播放/SC 路由
@@ -15,8 +21,9 @@ import { sendJson, sendBadRequest, sendError } from './route-helpers.js';
  */
 export async function registerRoomRoutes(
   app: FastifyInstance,
-  service: LiveSiteService,
+  options: RoomRouterOptions,
 ): Promise<void> {
+  const { service, streamManager } = options;
   // 房间详情
   app.get('/api/v1/sites/:siteId/rooms/:roomId', async (req: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -79,6 +86,24 @@ export async function registerRoomRoutes(
       const quality = LiveSiteService.playQualityFromJson(qualityJson, siteId);
 
       const playUrl = await service.getPlayUrls(siteId, detail, quality);
+
+      // local 平台：getPlayUrls 返回的是服务器本地文件路径（内部契约），
+      // 需像 /stream/playback 一样经 ffmpeg 转 HLS，返回可播放的 m3u8 路径。
+      // 返回相对路径（session.hlsUrl，形如 /api/v1/stream/hls/{id}/play.m3u8），
+      // 由客户端用已配置的 serverURL 拼接成完整 URL，避免后端 0.0.0.0 监听地址问题。
+      // 参考 stream-routes.ts 的 local 特判逻辑。
+      if (siteId === 'local' && playUrl.urls.length > 0) {
+        const filePath = playUrl.urls[0];
+        try {
+          const session = await streamManager.getOrCreateLocalStream(filePath, siteId, detail.roomId);
+          sendJson(reply, { urls: [session.hlsUrl], headers: playUrl.headers });
+        } catch (e) {
+          req.log.error({ err: e }, 'local 平台转 HLS 失败');
+          sendCustomError(reply, 500, e instanceof Error ? e.message : String(e));
+        }
+        return;
+      }
+
       sendJson(reply, LiveSiteService.playUrlToJson(playUrl));
     } catch (e) {
       req.log.error({ err: e }, '获取播放直链失败');

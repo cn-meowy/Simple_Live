@@ -6,6 +6,7 @@ import 'package:simple_live_app/app/app_style.dart';
 import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_app/app/services/live_api_factory.dart';
 import 'package:simple_live_app/app/utils.dart';
+import 'package:simple_live_app/app/utils/server_url_util.dart';
 import 'package:simple_live_app/services/server_sync_service.dart';
 import 'package:simple_live_app/widgets/settings/settings_card.dart';
 import 'package:simple_live_app/widgets/settings/settings_switch.dart';
@@ -68,6 +69,10 @@ class _ServerSyncPageState extends State<ServerSyncPage> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: _urlController,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        keyboardType: TextInputType.url,
+                        textCapitalization: TextCapitalization.none,
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           hintText: "如: http://192.168.1.100:8089",
@@ -207,11 +212,12 @@ class _ServerSyncPageState extends State<ServerSyncPage> {
 
   /// 测试连接
   Future<void> _testConnection() async {
-    final url = _urlController.text.trim();
+    final url = _normalizeUrl(_urlController.text);
     if (url.isEmpty) {
       SmartDialog.showToast("请输入服务端地址");
       return;
     }
+    _urlController.text = url;
 
     SmartDialog.showLoading(msg: "正在测试连接...");
     try {
@@ -225,6 +231,16 @@ class _ServerSyncPageState extends State<ServerSyncPage> {
     } catch (e) {
       SmartDialog.dismiss(status: SmartStatus.loading);
       SmartDialog.showToast("连接失败: $e");
+    }
+  }
+
+  /// 规范化地址：修复 iOS 键盘吞冒号、补 scheme、去尾斜杠。
+  /// 非法协议时回退到 trim，不阻断输入。
+  String _normalizeUrl(String input) {
+    try {
+      return ServerUrlUtil.normalize(input);
+    } catch (_) {
+      return input.trim();
     }
   }
 }

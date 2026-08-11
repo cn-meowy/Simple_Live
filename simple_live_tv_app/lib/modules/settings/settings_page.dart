@@ -7,6 +7,7 @@ import 'package:simple_live_tv_app/app/app_style.dart';
 import 'package:simple_live_tv_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_tv_app/app/utils.dart';
 import 'package:simple_live_tv_app/modules/settings/settings_controller.dart';
+import 'package:simple_live_tv_app/routes/route_path.dart';
 import 'package:simple_live_tv_app/services/bilibili_account_service.dart';
 import 'package:simple_live_tv_app/services/follow_user_service.dart';
 import 'package:simple_live_tv_app/widgets/app_scaffold.dart';
@@ -482,6 +483,34 @@ class SettingsPage extends GetView<SettingsController> {
     return ListView(
       padding: AppStyle.edgeInsetsA48,
       children: [
+        HighlightListTile(
+          focusNode: controller.serverSettingsFocusNode,
+          title: "服务端设置",
+          subtitle: "配置自建服务端地址、接口代理与数据同步",
+          leading: const Icon(Icons.dns),
+          onTap: () {
+            Get.toNamed(RoutePath.kServerSettings);
+          },
+        ),
+        AppStyle.vGap24,
+        HighlightListTile(
+          focusNode: controller.userAgreementFocusNode,
+          title: "用户协议",
+          leading: const Icon(Icons.description_outlined),
+          onTap: () {
+            Get.toNamed(RoutePath.kUserAgreement);
+          },
+        ),
+        AppStyle.vGap24,
+        HighlightListTile(
+          focusNode: controller.privacyPolicyFocusNode,
+          title: "隐私协议",
+          leading: const Icon(Icons.privacy_tip_outlined),
+          onTap: () {
+            Get.toNamed(RoutePath.kPrivacyPolicy);
+          },
+        ),
+        AppStyle.vGap24,
         HighlightListTile(
           focusNode: controller.versionFocusNode,
           title: "版本",

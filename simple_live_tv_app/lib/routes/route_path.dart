@@ -1,7 +1,13 @@
 /// 路由路径
 class RoutePath {
-  /// 用户协议
+  /// 首次启动协议门控页
   static const kAgreement = "/agreement";
+
+  /// 用户协议
+  static const kUserAgreement = "/agreement/user";
+
+  /// 隐私协议
+  static const kPrivacyPolicy = "/agreement/privacy";
 
   /// 首页
   static const kHome = "/home";
@@ -29,6 +35,9 @@ class RoutePath {
 
   /// 设置
   static const kSettings = "/settings";
+
+  /// 服务端设置
+  static const kServerSettings = "/settings/server";
 
   /// 热门直播
   static const kHotLive = "/hot_live";

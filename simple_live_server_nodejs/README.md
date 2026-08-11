@@ -129,6 +129,7 @@ npm start
 | `LOCAL_VIDEO_DIR` | /data/videos | 本地视频文件目录（local 平台数据源） |
 | `LOCAL_DATA_FILE` | (空) | 本地数据 JSON 文件路径（为空则自动扫描目录） |
 | `COVER_DIR` | /tmp/live_stream/covers | 封面图片存储目录（演示模式截取视频第一帧保存位置） |
+| `AVATAR_DIR` | /tmp/live_stream/avatars | 头像图片存储目录（演示模式截取视频中间帧保存位置） |
 | `SYNC_DB_PATH` | /data/sync_data.db | 同步数据 SQLite 数据库路径（关注/观看记录等持久化，为空则纯内存模式） |
 | `BILIBILI_COOKIE` | (空) | B站 Cookie（可选） |
 | `DOUYIN_COOKIE` | (空) | 抖音 Cookie（可选） |
@@ -165,6 +166,8 @@ npm start
 | GET | `/stream/playback?siteId=&roomId=&quality=` | 获取播放端点 |
 | POST | `/stream/transcode` | FLV 转 HLS |
 | GET | `/stream/hls/:sessionId/*` | HLS 静态文件 |
+| GET | `/stream/covers/:filename` | 封面图片静态文件（演示模式） |
+| GET | `/stream/avatars/:filename` | 头像图片静态文件（演示模式） |
 
 ### 弹幕
 
@@ -257,13 +260,37 @@ npm start
 DEMO_MODE=true
 ```
 
-### 视频封面截取
+### 视频封面与头像截取
 
-演示模式开启后，扫描视频目录时会调用 ffmpeg 截取每个视频的第一帧保存为 jpg 图片，`cover` 字段返回可访问的 HTTP URL（形如 `http://host:port/api/v1/stream/covers/<roomId>.jpg`）。
+演示模式开启后，扫描视频目录时会调用 ffmpeg 截取每个视频的帧保存为 jpg 图片：
+
+- **封面（cover）**：截取第 0 秒第一帧，`cover` 字段返回可访问的相对 URL（形如 `/api/v1/stream/covers/<roomId>.jpg`）
+- **头像（avatar）**：截取第 10 秒中间帧，`userAvatar` 字段（房间详情）返回可访问的相对 URL（形如 `/api/v1/stream/avatars/<roomId>.jpg`）。视频不足 10 秒时截取失败，头像降级为空，详情页回退使用封面兜底
+
+截取参数：
 
 - 封面图片存储目录由 `COVER_DIR` 环境变量控制，默认 `/tmp/live_stream/covers`
-- 截帧失败不会阻断扫描流程，`cover` 字段降级为空字符串
-- 非演示模式不截取封面，`cover` 字段为空
+- 头像图片存储目录由 `AVATAR_DIR` 环境变量控制，默认 `/tmp/live_stream/avatars`
+- 截帧失败不会阻断扫描流程，对应字段降级为空字符串
+- 非演示模式不截取封面/头像，`cover`/`avatar` 字段均为空
+
+### 类型图标（typeIcon）
+
+列表项 `typeIcon` 字段按视频文件相对路径（含子目录）的关键词匹配返回图标 key，客户端自行映射 assets 资源。服务端只产出 key，不提供图片资源。
+
+**key 集合（客户端 assets 映射契约）**：
+
+| key | 匹配关键词（不区分大小写） |
+|-----|--------------------------|
+| `anime` | anime、动画、番剧、ova、剧场版 |
+| `movie` | movie、电影、影院 |
+| `music` | music、音乐、演唱会、concert、mv、mtv |
+| `game` | game、游戏、实况、直播录像、通关 |
+| `landscape` | landscape、风景、自然、scenery、旅行、travel |
+| `tech` | tech、科技、教程、tutorial、编程 |
+| `default` | 未命中任何关键词时的默认值 |
+
+匹配按上表顺序进行，命中首个即返回（更具体的关键词在前）。支持目录级分类，例如 `/anime/episode01.mp4` 匹配 `anime`。
 
 ### 本地直播流（local 平台）
 
@@ -273,6 +300,8 @@ DEMO_MODE=true
 1. 服务启动时扫描 `LOCAL_VIDEO_DIR` 目录下的视频文件（mp4/mkv/flv/ts/avi/mov/webm）
 2. 每个视频文件生成一个"房间"，出现在首页推荐和搜索中
 3. 播放时用 ffmpeg `-re -stream_loop -1` 将文件转为循环播放的 HLS 直播流
+4. 分片不删除（不用 `delete_segments`），用 ffprobe 探测视频时长预算一轮分片数 N=ceil(时长/2)，m3u8 窗口大小取 N 恰好覆盖一轮
+5. 播放器请求超出当前 m3u8 窗口的 ts 序号时，服务端按 `序号 % N` 映射到首轮分片，实现循环播放兜底，避免 404 卡在最后一个分片
 
 **数据来源（二选一）**：
 - **自动扫描**（默认）：`LOCAL_DATA_FILE` 为空时，递归扫描 `LOCAL_VIDEO_DIR` 目录
@@ -289,7 +318,9 @@ DEMO_MODE=true
       "cover": "",
       "userName": "本地直播",
       "online": 999,
-      "filePath": "/data/videos/landscape.mp4"
+      "filePath": "/data/videos/landscape.mp4",
+      "avatar": "",
+      "typeIcon": "landscape"
     }
   ]
 }

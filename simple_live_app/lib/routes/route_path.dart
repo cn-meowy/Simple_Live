@@ -51,11 +51,20 @@ class RoutePath {
   /// 关注设置
   static const kSettingsFollow = "/settings/follow";
 
-  /// BiliBili Web登录
+  /// BiliBili Web登录（保留旧路径作为迁移重定向）
   static const kBiliBiliWebLogin = "/settings/account/bilibili/web_login";
 
-  /// BiliBili 二维码登录
+  /// BiliBili 二维码登录（保留旧路径作为迁移重定向）
   static const kBiliBiliQRLogin = "/settings/account/bilibili/qr_login";
+
+  /// 通用站点扫码登录（接受 siteId 参数）
+  static const kSiteAccountQR = "/settings/account/qr";
+
+  /// 通用站点 Cookie 配置（接受 siteId 参数）
+  static const kSiteAccountCookie = "/settings/account/cookie";
+
+  /// 通用站点用户名配置（接受 siteId + label + hint 参数）
+  static const kSiteAccountUsername = "/settings/account/username";
 
   /// 数据同步
   static const kLocalSync = "/local_sync";
@@ -81,9 +90,9 @@ class RoutePath {
   /// 远程同步-WebDAVConfig
   static const kRemoteSyncWebDavConfig = "/remote_sync/webDAVConfig";
 
-  /// 测试页面
-  static const kTest = "/test";
-
   /// 服务端设置
   static const kSettingsServer = "/settings/server";
+
+  /// 用户协议 / 隐私协议
+  static const kSettingsAgreement = "/settings/agreement";
 }

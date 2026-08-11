@@ -45,6 +45,9 @@ export class SyncDataManager {
   /** Cookie 存储：siteId -> cookie字符串 */
   private readonly _cookieData = new Map<string, string>();
 
+  /** 用户名存储：siteId -> username */
+  private readonly _usernameData = new Map<string, string>();
+
   /**
    * 构造函数
    *
@@ -74,6 +77,12 @@ export class SyncDataManager {
     const cookies = this.syncDb.getAllCookies();
     for (const [siteId, cookie] of cookies) {
       this._cookieData.set(siteId, cookie);
+    }
+
+    // 加载用户名
+    const usernames = this.syncDb.getAllUsernames();
+    for (const [siteId, username] of usernames) {
+      this._usernameData.set(siteId, username);
     }
   }
 
@@ -375,6 +384,31 @@ export class SyncDataManager {
   deleteCookie(siteId: string): void {
     this._cookieData.delete(siteId);
     this.syncDb?.deleteCookie(siteId);
+  }
+
+  // ============ 用户名 ============
+
+  /**
+   * 获取指定平台的用户名
+   */
+  getUsername(siteId: string): string | undefined {
+    return this._usernameData.get(siteId);
+  }
+
+  /**
+   * 设置指定平台的用户名
+   */
+  setUsername(siteId: string, username: string): void {
+    this._usernameData.set(siteId, username);
+    this.syncDb?.upsertUsername(siteId, username);
+  }
+
+  /**
+   * 删除指定平台的用户名
+   */
+  deleteUsername(siteId: string): void {
+    this._usernameData.delete(siteId);
+    this.syncDb?.deleteUsername(siteId);
   }
 
   // ============ 辅助方法 ============

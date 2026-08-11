@@ -100,6 +100,16 @@ class AppSettingsController extends GetxController {
     updateFollowThreadCount.value = LocalStorageService.instance
         .getValue(LocalStorageService.kUpdateFollowThreadCount, 4);
 
+    // 服务端相关配置
+    serverUrl.value = LocalStorageService.instance
+        .getValue(LocalStorageService.kServerUrl, "");
+    serverEnable.value = LocalStorageService.instance
+        .getValue(LocalStorageService.kServerEnable, false);
+    serverSyncEnable.value = LocalStorageService.instance
+        .getValue(LocalStorageService.kServerSyncEnable, false);
+    serverLastSyncTime.value = LocalStorageService.instance
+        .getValue(LocalStorageService.kServerLastSyncTime, "");
+
     super.onInit();
   }
 
@@ -333,5 +343,37 @@ class AppSettingsController extends GetxController {
     updateFollowThreadCount.value = e;
     LocalStorageService.instance
         .setValue(LocalStorageService.kUpdateFollowThreadCount, e);
+  }
+
+  // ============ 服务端相关配置 ============
+
+  /// 服务端地址
+  var serverUrl = "".obs;
+  void setServerUrl(String e) {
+    serverUrl.value = e;
+    LocalStorageService.instance.setValue(LocalStorageService.kServerUrl, e);
+  }
+
+  /// 是否启用服务端（控制直播接口是否走服务端）
+  var serverEnable = false.obs;
+  void setServerEnable(bool e) {
+    serverEnable.value = e;
+    LocalStorageService.instance.setValue(LocalStorageService.kServerEnable, e);
+  }
+
+  /// 是否启用数据自动同步
+  var serverSyncEnable = false.obs;
+  void setServerSyncEnable(bool e) {
+    serverSyncEnable.value = e;
+    LocalStorageService.instance
+        .setValue(LocalStorageService.kServerSyncEnable, e);
+  }
+
+  /// 最后一次服务端同步时间
+  var serverLastSyncTime = "".obs;
+  void setServerLastSyncTime(String e) {
+    serverLastSyncTime.value = e;
+    LocalStorageService.instance
+        .setValue(LocalStorageService.kServerLastSyncTime, e);
   }
 }

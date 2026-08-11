@@ -8,7 +8,7 @@ import 'package:simple_live_app/widgets/keep_alive_wrapper.dart';
 import 'package:simple_live_app/widgets/live_room_card.dart';
 import 'package:simple_live_app/widgets/net_image.dart';
 import 'package:simple_live_app/widgets/page_grid_view.dart';
-import 'package:simple_live_core/simple_live_core.dart';
+import 'package:simple_live_app/core/simple_live_core.dart';
 
 class SearchListView extends StatelessWidget {
   final String tag;
@@ -17,6 +17,10 @@ class SearchListView extends StatelessWidget {
       Get.find<SearchListController>(tag: tag);
   @override
   Widget build(BuildContext context) {
+    if (!Get.isRegistered<SearchListController>(tag: tag)) {
+      return const SizedBox.shrink();
+    }
+    final controller = this.controller;
     var roomRowCount = MediaQuery.of(context).size.width ~/ 200;
     if (roomRowCount < 2) roomRowCount = 2;
 
@@ -77,6 +81,7 @@ class SearchListView extends StatelessWidget {
                       ],
                     ),
                     onTap: () {
+                      if (!Get.isRegistered<SearchListController>(tag: tag)) return;
                       AppNavigator.toLiveRoomDetail(
                           site: controller.site, roomId: item.roomId);
                     },

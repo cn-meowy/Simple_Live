@@ -55,27 +55,43 @@ class IndexedSettingsPage extends GetView<IndexedSettingsController> {
           ),
           SettingsCard(
             child: Obx(
-              () => ReorderableListView(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                onReorder: controller.updateSiteSort,
-                children: controller.siteSort.map(
-                  (key) {
-                    var e = Sites.allSites[key]!;
-                    return ListTile(
-                      key: ValueKey(e.id),
-                      visualDensity: VisualDensity.compact,
-                      title: Text(e.name),
-                      leading: Image.asset(
-                        e.logo,
-                        width: 24,
-                        height: 24,
-                      ),
-                      trailing: const Icon(Icons.drag_handle),
-                    );
-                  },
-                ).toList(),
-              ),
+              () {
+                // 平台排序由后端 remoteSites 驱动：siteSort 经 _syncSiteSort
+                // 已裁剪为仅后端存在的 id，此处按 siteSort 顺序映射 Site。
+                final siteById = {
+                  for (final s in Sites.supportSites) s.id: s,
+                };
+                final sites = controller.siteSort
+                    .where((key) => siteById.containsKey(key))
+                    .map((key) => siteById[key]!)
+                    .toList();
+                if (sites.isEmpty) {
+                  return Padding(
+                    padding: AppStyle.edgeInsetsA16,
+                    child: const Text("暂无可用平台，请前往设置配置服务端地址"),
+                  );
+                }
+                return ReorderableListView(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  onReorder: controller.updateSiteSort,
+                  children: sites
+                      .map(
+                        (e) => ListTile(
+                          key: ValueKey(e.id),
+                          visualDensity: VisualDensity.compact,
+                          title: Text(e.name),
+                          leading: Image.asset(
+                            e.logo,
+                            width: 24,
+                            height: 24,
+                          ),
+                          trailing: const Icon(Icons.drag_handle),
+                        ),
+                      )
+                      .toList(),
+                );
+              },
             ),
           ),
         ],

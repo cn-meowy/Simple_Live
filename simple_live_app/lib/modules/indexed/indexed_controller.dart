@@ -4,7 +4,6 @@ import 'package:get/get.dart';
 import 'package:simple_live_app/app/constant.dart';
 import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_app/app/event_bus.dart';
-import 'package:simple_live_app/app/utils.dart';
 import 'package:simple_live_app/modules/category/category_controller.dart';
 import 'package:simple_live_app/modules/category/category_page.dart';
 import 'package:simple_live_app/modules/home/home_controller.dart';
@@ -12,6 +11,7 @@ import 'package:simple_live_app/modules/home/home_page.dart';
 import 'package:simple_live_app/modules/follow_user/follow_user_controller.dart';
 import 'package:simple_live_app/modules/follow_user/follow_user_page.dart';
 import 'package:simple_live_app/modules/mine/mine_page.dart';
+import 'package:simple_live_app/widgets/agreement/agreement_dialog.dart';
 
 class IndexedController extends GetxController {
   RxList<HomePageItem> items = RxList<HomePageItem>([]);
@@ -56,19 +56,15 @@ class IndexedController extends GetxController {
 
   @override
   void onInit() {
-    Future.delayed(Duration.zero, showFirstRun);
     items.value = AppSettingsController.instance.homeSort
         .map((key) => Constant.allHomePages[key]!)
         .toList();
     setIndex(0);
     super.onInit();
-  }
-
-  void showFirstRun() async {
-    var settingsController = Get.find<AppSettingsController>();
-    if (settingsController.firstRun) {
-      settingsController.setNoFirstRun();
-      await Utils.showStatement();
-    } 
+    if (AppSettingsController.instance.firstRun) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        showAgreementDialog();
+      });
+    }
   }
 }

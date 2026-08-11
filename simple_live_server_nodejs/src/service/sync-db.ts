@@ -12,6 +12,7 @@
  * - blocked_words: 屏蔽词（word 主键）
  * - settings:      设置（key 主键，key-value）
  * - cookies:       Cookie（site_id 主键）
+ * - user_profiles: 用户名（site_id 主键，username + updated_at）
  */
 
 import { DatabaseSync } from 'node:sqlite';
@@ -29,6 +30,8 @@ interface DbRow {
   value?: string;
   site_id?: string;
   cookie?: string;
+  username?: string;
+  updated_at?: string;
 }
 
 export class SyncDb {
@@ -91,6 +94,13 @@ export class SyncDb {
       CREATE TABLE IF NOT EXISTS cookies (
         site_id  TEXT PRIMARY KEY,
         cookie   TEXT NOT NULL
+      )
+    `);
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS user_profiles (
+        site_id     TEXT PRIMARY KEY,
+        username    TEXT NOT NULL DEFAULT '',
+        updated_at  TEXT NOT NULL DEFAULT ''
       )
     `);
   }
@@ -215,6 +225,47 @@ export class SyncDb {
     const result = new Map<string, string>();
     for (const r of rows) {
       result.set(r.site_id!, r.cookie!);
+    }
+    return result;
+  }
+
+  // ============ 用户名 ============
+
+  /**
+   * 写入或更新指定平台的用户名
+   */
+  upsertUsername(siteId: string, username: string): void {
+    const updatedAt = new Date().toISOString();
+    this.db.prepare(
+      'INSERT OR REPLACE INTO user_profiles (site_id, username, updated_at) VALUES (?, ?, ?)',
+    ).run(siteId, username, updatedAt);
+  }
+
+  /**
+   * 删除指定平台的用户名
+   */
+  deleteUsername(siteId: string): void {
+    this.db.prepare('DELETE FROM user_profiles WHERE site_id = ?').run(siteId);
+  }
+
+  /**
+   * 获取指定平台的用户名
+   */
+  getUsername(siteId: string): string | undefined {
+    const row = this.db.prepare(
+      'SELECT username FROM user_profiles WHERE site_id = ?',
+    ).get(siteId) as DbRow | undefined;
+    return row?.username;
+  }
+
+  /**
+   * 获取全部用户名（启动时加载到内存 Map）
+   */
+  getAllUsernames(): Map<string, string> {
+    const rows = this.db.prepare('SELECT site_id, username FROM user_profiles').all() as DbRow[];
+    const result = new Map<string, string>();
+    for (const r of rows) {
+      result.set(r.site_id!, r.username!);
     }
     return result;
   }

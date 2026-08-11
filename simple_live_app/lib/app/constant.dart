@@ -32,6 +32,9 @@ class Constant {
   static const String kDouyu = "douyu";
   static const String kHuya = "huya";
   static const String kDouyin = "douyin";
+
+  /// 本地虚拟平台（服务端 demo 模式用于 Apple Store 审核）
+  static const String kLocal = "local";
 }
 
 class HomePageItem {

@@ -1,5 +1,6 @@
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
+import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 
 class NetImage extends StatelessWidget {
   final String picUrl;
@@ -27,6 +28,13 @@ class NetImage extends StatelessWidget {
     var pic = picUrl;
     if (pic.startsWith("//")) {
       pic = 'https:$pic';
+    } else if (pic.startsWith("/api/")) {
+      // 服务端返回的相对路径，拼接当前配置的 serverUrl
+      final serverUrl =
+          AppSettingsController.instance.serverUrl.value.replaceAll(RegExp(r'/+$'), '');
+      if (serverUrl.isNotEmpty) {
+        pic = '$serverUrl$pic';
+      }
     }
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),

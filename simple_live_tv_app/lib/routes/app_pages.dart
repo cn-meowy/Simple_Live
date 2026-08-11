@@ -3,6 +3,7 @@
 import 'package:get/get.dart';
 import 'package:simple_live_tv_app/modules/account/bilibili/qr_login_controller.dart';
 import 'package:simple_live_tv_app/modules/account/bilibili/qr_login_page.dart';
+import 'package:simple_live_tv_app/modules/agreement/agreement_gate_page.dart';
 import 'package:simple_live_tv_app/modules/agreement/agreement_page.dart';
 import 'package:simple_live_tv_app/modules/category/category_controller.dart';
 import 'package:simple_live_tv_app/modules/category/category_page.dart';
@@ -21,6 +22,8 @@ import 'package:simple_live_tv_app/modules/search/anchor/search_anchor_controlle
 import 'package:simple_live_tv_app/modules/search/anchor/search_anchor_page.dart';
 import 'package:simple_live_tv_app/modules/search/room/search_room_controller.dart';
 import 'package:simple_live_tv_app/modules/search/room/search_room_page.dart';
+import 'package:simple_live_tv_app/modules/settings/server_settings_controller.dart';
+import 'package:simple_live_tv_app/modules/settings/server_settings_page.dart';
 import 'package:simple_live_tv_app/modules/settings/settings_controller.dart';
 import 'package:simple_live_tv_app/modules/settings/settings_page.dart';
 import 'package:simple_live_tv_app/modules/sync/sync_controller.dart';
@@ -31,9 +34,26 @@ import 'route_path.dart';
 class AppPages {
   AppPages._();
   static final routes = [
+    // 首次启动协议门控页
     GetPage(
       name: RoutePath.kAgreement,
-      page: () => const AgreementPage(),
+      page: () => const AgreementGatePage(),
+    ),
+    // 用户协议
+    GetPage(
+      name: RoutePath.kUserAgreement,
+      page: () => const AgreementPage(
+        title: "用户协议",
+        assetPath: "assets/agreements/user_agreement.txt",
+      ),
+    ),
+    // 隐私协议
+    GetPage(
+      name: RoutePath.kPrivacyPolicy,
+      page: () => const AgreementPage(
+        title: "隐私协议",
+        assetPath: "assets/agreements/privacy_policy.txt",
+      ),
     ),
     // 首页
     GetPage(
@@ -83,6 +103,14 @@ class AppPages {
       page: () => const SettingsPage(),
       bindings: [
         BindingsBuilder.put(() => SettingsController()),
+      ],
+    ),
+    // 服务端设置
+    GetPage(
+      name: RoutePath.kServerSettings,
+      page: () => const ServerSettingsPage(),
+      bindings: [
+        BindingsBuilder.put(() => ServerSettingsController()),
       ],
     ),
     // 历史记录

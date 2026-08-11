@@ -55,6 +55,7 @@ class Log {
   );
 
   static void d(String message, [bool writeFile = true]) {
+    if (!_shouldLog(message)) return;
     addDebugLog(message, Colors.orange);
     logger.d("${DateTime.now().toString()}\n$message");
     if (writeFile) {
@@ -63,6 +64,7 @@ class Log {
   }
 
   static void i(String message, [bool writeFile = true]) {
+    if (!_shouldLog(message)) return;
     addDebugLog(message, Colors.blue);
     logger.i("${DateTime.now().toString()}\n$message");
     if (writeFile) {
@@ -100,6 +102,33 @@ class Log {
   }
 
   static String get _currentTime => Utils.timeFormat.format(DateTime.now());
+
+  static final Map<String, _LogDedupEntry> _dedupMap = {};
+  static const int _dedupMaxRepeats = 3;
+  static const Duration _dedupWindow = Duration(seconds: 5);
+
+  static bool _shouldLog(String message) {
+    final now = DateTime.now();
+    final entry = _dedupMap[message];
+    if (entry == null || now.difference(entry.firstAt) > _dedupWindow) {
+      _dedupMap[message] = _LogDedupEntry(now, 1);
+      if (_dedupMap.length > 200) {
+        _dedupMap.remove(_dedupMap.keys.first);
+      }
+      return true;
+    }
+    entry.count++;
+    if (entry.count > _dedupMaxRepeats) {
+      return false;
+    }
+    return true;
+  }
+}
+
+class _LogDedupEntry {
+  final DateTime firstAt;
+  int count;
+  _LogDedupEntry(this.firstAt, this.count);
 }
 
 class LogFileWriter {

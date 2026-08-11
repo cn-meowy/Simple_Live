@@ -1,168 +1,99 @@
-import 'dart:io';
-
-import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
-import 'package:simple_live_app/app/utils.dart';
+import 'package:simple_live_app/app/controller/app_settings_controller.dart';
+import 'package:simple_live_app/app/log.dart';
+import 'package:simple_live_app/app/sites.dart';
+import 'package:simple_live_app/models/account/site_account_descriptor.dart';
+import 'package:simple_live_app/requests/http_client.dart';
 import 'package:simple_live_app/routes/route_path.dart';
 import 'package:simple_live_app/services/bilibili_account_service.dart';
 import 'package:simple_live_app/services/douyin_account_service.dart';
-import 'package:simple_live_core/simple_live_core.dart';
 
+/// 账号管理控制器（接口化版本）
+///
+/// 列表由后端 `/api/v1/sites` 返回的 `account` 描述符驱动，
+/// 每个站点的账号页类型决定点击行为。
 class AccountController extends GetxController {
-  void bilibiliTap() async {
-    if (BiliBiliAccountService.instance.logined.value) {
-      var result = await Utils.showAlertDialog("确定要退出哔哩哔哩账号吗？", title: "退出登录");
-      if (result) {
+  /// 获取服务端实际登录状态（基于 cookie 是否存在）
+  Future<bool> hasCookie(String siteId) async {
+    try {
+      final serverUrl = AppSettingsController.instance.serverUrl.value;
+      if (serverUrl.isEmpty) return false;
+      final result = await HttpClient.instance.getJson(
+        '$serverUrl/api/v1/cookie/$siteId',
+      );
+      final cookie = result['data']['cookie'] as String? ?? '';
+      return cookie.isNotEmpty;
+    } catch (e) {
+      Log.w('读取 $siteId cookie 状态失败: $e');
+      return false;
+    }
+  }
+
+  void onSiteTap(Site site) {
+    final descriptor = site.account;
+    if (descriptor == null || descriptor.type == SiteAccountType.none) return;
+    switch (descriptor.type) {
+      case SiteAccountType.qr:
+        Get.toNamed(RoutePath.kSiteAccountQR, parameters: {'siteId': site.id});
+        break;
+      case SiteAccountType.cookie:
+        // qr 类型在 QR 页内可二次跳转到 cookie（保持向后兼容）
+        Get.toNamed(RoutePath.kSiteAccountCookie, parameters: {'siteId': site.id});
+        break;
+      case SiteAccountType.username:
+        Get.toNamed(
+          RoutePath.kSiteAccountUsername,
+          parameters: {
+            'siteId': site.id,
+            'label': descriptor.label,
+            'hint': descriptor.hint,
+          },
+        );
+        break;
+      case SiteAccountType.none:
+        break;
+    }
+  }
+
+  /// 通用 cookie 清除
+  Future<void> clearCookie(String siteId) async {
+    try {
+      final serverUrl = AppSettingsController.instance.serverUrl.value;
+      if (serverUrl.isEmpty) return;
+      final dio = HttpClient.instance.dio;
+      await dio.delete('$serverUrl/api/v1/cookie/$siteId');
+      // 同步本地状态
+      if (siteId == 'bilibili') {
         BiliBiliAccountService.instance.logout();
-      }
-    } else {
-      //AppNavigator.toBiliBiliLogin();
-      bilibiliLogin();
-    }
-  }
-
-  void bilibiliLogin() {
-    Utils.showBottomSheet(
-      title: "登录哔哩哔哩",
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Visibility(
-            visible: Platform.isAndroid || Platform.isIOS,
-            child: ListTile(
-              leading: const Icon(Icons.account_circle_outlined),
-              title: const Text("Web登录"),
-              subtitle: const Text("填写用户名密码登录"),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Get.back();
-                Get.toNamed(RoutePath.kBiliBiliWebLogin);
-              },
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.qr_code),
-            title: const Text("扫码登录"),
-            subtitle: const Text("使用哔哩哔哩APP扫描二维码登录"),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Get.back();
-              Get.toNamed(RoutePath.kBiliBiliQRLogin);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.edit_outlined),
-            title: const Text("Cookie登录"),
-            subtitle: const Text("手动输入Cookie登录"),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Get.back();
-              doBiliBiliCookieLogin();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void doBiliBiliCookieLogin() async {
-    var cookie = await Utils.showEditTextDialog(
-      "",
-      title: "请输入Cookie",
-      hintText: "请输入Cookie",
-    );
-    if (cookie == null || cookie.isEmpty) {
-      return;
-    }
-    BiliBiliAccountService.instance.setCookie(cookie);
-    await BiliBiliAccountService.instance.loadUserInfo();
-  }
-
-  void douyinTap() async {
-    if (DouyinAccountService.instance.hasCookie.value) {
-      var result = await Utils.showAlertDialog("确定要清除自定义 ttwid 吗？", title: "清除配置");
-      if (result) {
+      } else if (siteId == 'douyin') {
         DouyinAccountService.instance.clearCookie();
-        SmartDialog.showToast("已清除自定义 ttwid，将使用默认 ttwid");
       }
-    } else {
-      doDouyinCookieConfig();
+      SmartDialog.showToast("已清除");
+    } catch (e) {
+      Log.logPrint(e);
+      SmartDialog.showToast("清除失败：$e");
     }
   }
 
-  void doDouyinCookieConfig() {
-    // 初始化文本框时，只显示 ttwid 的值部分
-    var savedCookie = DouyinAccountService.instance.cookie;
-    var displayText = savedCookie;
-    if (savedCookie.startsWith('ttwid=')) {
-      displayText = savedCookie.substring(6); // 去掉 "ttwid="
-    }
-    var controller = TextEditingController(text: displayText);
+  /// 测试方法：用于在 QR 页内跳转到 Cookie 页
+  void gotoCookieFromQR(String siteId) {
+    Get.back();
+    Get.toNamed(RoutePath.kSiteAccountCookie, parameters: {'siteId': siteId});
+  }
 
-    Get.dialog(
-      AlertDialog(
-        title: const Text("配置抖音 ttwid"),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "默认已内置有效的 ttwid，可观看所有画质（包括蓝光）。\n如有需要可自定义配置。",
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  hintText: "请粘贴 ttwid 值（留空则使用默认值）",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextButton.icon(
-                onPressed: () {
-                  // 提取 ttwid 的值部分（去掉 "ttwid=" 前缀）
-                  var defaultValue = DouyinSite.kDefaultCookie;
-                  if (defaultValue.startsWith('ttwid=')) {
-                    defaultValue = defaultValue.substring(6); // 去掉 "ttwid="
-                  }
-                  controller.text = defaultValue;
-                },
-                icon: const Icon(Icons.restore),
-                label: const Text("恢复默认 ttwid"),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: const Text("取消"),
-          ),
-          TextButton(
-            onPressed: () {
-              var input = controller.text.trim();
-              Get.back();
-              if (input.isEmpty) {
-                DouyinAccountService.instance.clearCookie();
-                SmartDialog.showToast("已清除自定义 Cookie，将使用默认 ttwid");
-              } else {
-                // 如果用户只输入了 ttwid 值，自动添加 "ttwid=" 前缀
-                var cookie = input;
-                if (!input.startsWith('ttwid=')) {
-                  cookie = 'ttwid=$input';
-                }
-                DouyinAccountService.instance.setCookie(cookie);
-                SmartDialog.showToast("ttwid 已保存");
-              }
-            },
-            child: const Text("确定"),
-          ),
-        ],
-      ),
-    );
+  /// 探测是否有用户名（用于 username 站点的副标题）
+  Future<bool> hasUsername(String siteId) async {
+    try {
+      final serverUrl = AppSettingsController.instance.serverUrl.value;
+      if (serverUrl.isEmpty) return false;
+      final result = await HttpClient.instance.getJson(
+        '$serverUrl/api/v1/sites/$siteId/account/username',
+      );
+      final v = result['data']['username'] as String? ?? '';
+      return v.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
   }
 }

@@ -226,12 +226,13 @@ class FollowService extends GetxService {
   Future updateLiveStatus(FollowUser item) async {
     try {
       var siteId = item.siteId;
+      var api = await LiveApiFactory.instanceAsync;
       // 先只查状态
-      var isLiving = await LiveApiFactory.instance.getLiveStatus(siteId, item.roomId);
+      var isLiving = await api.getLiveStatus(siteId, item.roomId);
       item.liveStatus.value = isLiving ? 2 : 1;
       if (item.liveStatus.value == 2) {
         // 只有正在直播时才查详细信息
-        var detail = await LiveApiFactory.instance.getRoomDetail(siteId, item.roomId);
+        var detail = await api.getRoomDetail(siteId, item.roomId);
         item.liveStartTime = detail.showTime;
       } else {
         item.liveStartTime = null;
@@ -280,7 +281,7 @@ class FollowService extends GetxService {
         return;
       }
       var jsonFile = File(
-          '$dir/SimpleLive_${DateTime.now().millisecondsSinceEpoch ~/ 1000}.json');
+          '$dir/MeowLive_${DateTime.now().millisecondsSinceEpoch ~/ 1000}.json');
       var jsonText = generateJson();
       await jsonFile.writeAsString(jsonText);
       SmartDialog.showToast("已导出关注列表");

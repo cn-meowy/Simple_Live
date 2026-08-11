@@ -10,6 +10,7 @@ import 'package:simple_live_tv_app/app/constant.dart';
 import 'package:simple_live_tv_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_tv_app/app/event_bus.dart';
 import 'package:simple_live_tv_app/app/log.dart';
+import 'package:simple_live_tv_app/app/services/live_api_factory.dart';
 import 'package:simple_live_tv_app/app/sites.dart';
 import 'package:simple_live_tv_app/app/utils.dart';
 import 'package:simple_live_tv_app/models/db/follow_user.dart';
@@ -28,7 +29,7 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
   }) {
     rxSite = pSite.obs;
     rxRoomId = pRoomId.obs;
-    liveDanmaku = site.liveSite.getDanmaku();
+    liveDanmaku = LiveApiFactory.instance.getDanmaku(site.id);
   }
   final FocusNode focusNode = FocusNode();
   late Rx<Site> rxSite;
@@ -145,7 +146,7 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     try {
       SmartDialog.showLoading(msg: "");
       pageLoadding.value = true;
-      detail.value = await site.liveSite.getRoomDetail(roomId: roomId);
+      detail.value = await LiveApiFactory.instance.getRoomDetail(site.id, roomId);
 
       addHistory();
       online.value = detail.value!.online;
@@ -173,7 +174,7 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     currentQuality = -1;
     try {
       var playQualites =
-          await site.liveSite.getPlayQualites(detail: detail.value!);
+          await LiveApiFactory.instance.getPlayQualites(site.id, detail.value!);
 
       if (playQualites.isEmpty) {
         SmartDialog.showToast("无法读取播放清晰度");
@@ -205,8 +206,8 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     currentQualityInfo.value = qualites[currentQuality].quality;
     currentLineInfo.value = "";
     currentLineIndex = -1;
-    var playUrl = await site.liveSite
-        .getPlayUrls(detail: detail.value!, quality: qualites[currentQuality]);
+    var playUrl = await LiveApiFactory.instance
+        .getPlayUrls(site.id, detail.value!, qualites[currentQuality]);
     if (playUrl.urls.isEmpty) {
       SmartDialog.showToast("无法读取播放地址");
       return;
@@ -365,7 +366,7 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     danmakuController?.clear();
 
     // 重新设置LiveDanmaku
-    liveDanmaku = site.liveSite.getDanmaku();
+    liveDanmaku = LiveApiFactory.instance.getDanmaku(site.id);
 
     // 停止播放
     await player.stop();

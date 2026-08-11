@@ -13,3 +13,8 @@ xcuserdata/
 /**/.vscode/
 /simple_live_server_nodejs/data/
 /simple_live_apple_tv/
+
+# Android signing (keystore & key.properties) — never commit
+*.jks
+*.keystore
+**/key.properties

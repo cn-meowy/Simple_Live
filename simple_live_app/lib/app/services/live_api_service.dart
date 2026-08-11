@@ -1,10 +1,16 @@
-import 'package:simple_live_core/simple_live_core.dart';
+import 'package:simple_live_app/core/simple_live_core.dart';
 
 /// LiveApi 抽象接口
 ///
 /// 定义与 simple_live_core 的 LiveSite 方法签名一致的抽象类。
 /// 根据配置返回 Remote 或 Local 实现。
 abstract class LiveApiService {
+  /// 获取站点列表
+  ///
+  /// 返回后端 `/api/v1/sites` 的结果（每项含 `id`、`name`，可选 `account` 描述符），
+  /// 供首页/分类/搜索 Tab 渲染与账号管理。
+  Future<List<Map<String, dynamic>>> getSites();
+
   /// 获取分类列表
   Future<List<LiveCategory>> getCategores(String siteId);
 

@@ -27,6 +27,23 @@ const DEFAULT_ONLINE = 999;
 /** 固定主播名 */
 const DEFAULT_USER_NAME = '本地直播';
 
+/**
+ * 类型图标关键词映射表
+ *
+ * 按顺序匹配（更具体的关键词在前，避免误判），命中首个即返回对应 icon key。
+ * 匹配对象为文件相对路径（含子目录）的小写形式，支持目录级分类。
+ *
+ * key 集合（客户端 assets 映射契约）：anime / movie / music / game / landscape / tech / default
+ */
+const TYPE_ICON_KEYWORDS: ReadonlyArray<{ keys: readonly string[]; icon: string }> = [
+  { keys: ['anime', '动画', '番剧', 'ova', '剧场版'], icon: 'anime' },
+  { keys: ['movie', '电影', '影院'], icon: 'movie' },
+  { keys: ['music', '音乐', '演唱会', 'concert', 'mv', 'mtv'], icon: 'music' },
+  { keys: ['game', '游戏', '实况', '直播录像', '通关'], icon: 'game' },
+  { keys: ['landscape', '风景', '自然', 'scenery', '旅行', 'travel'], icon: 'landscape' },
+  { keys: ['tech', '科技', '教程', 'tutorial', '编程'], icon: 'tech' },
+];
+
 export class LocalVideoScanner {
   /** 已加载的房间列表 */
   private _rooms: LocalRoomData[] = [];
@@ -49,6 +66,12 @@ export class LocalVideoScanner {
   /** 封面图片访问的基础 URL（如 http://host:port/api/v1/stream/covers） */
   readonly coverBaseUrl: string;
 
+  /** 头像图片存储目录 */
+  readonly avatarDir: string;
+
+  /** 头像图片访问的基础 URL（相对路径前缀，如 /api/v1/stream/avatars） */
+  readonly avatarBaseUrl: string;
+
   /** ffmpeg 可执行文件路径 */
   readonly ffmpegPath: string;
 
@@ -59,6 +82,8 @@ export class LocalVideoScanner {
     coverDir: string = '',
     coverBaseUrl: string = '',
     ffmpegPath: string = 'ffmpeg',
+    avatarDir: string = '',
+    avatarBaseUrl: string = '',
   ) {
     this.videoDir = videoDir;
     this.dataFile = dataFile;
@@ -66,6 +91,8 @@ export class LocalVideoScanner {
     this.coverDir = coverDir;
     this.coverBaseUrl = coverBaseUrl;
     this.ffmpegPath = ffmpegPath;
+    this.avatarDir = avatarDir;
+    this.avatarBaseUrl = avatarBaseUrl;
   }
 
   /**
@@ -171,6 +198,8 @@ export class LocalVideoScanner {
           room.userName || DEFAULT_USER_NAME,
           room.online || DEFAULT_ONLINE,
           room.filePath,
+          room.avatar,
+          room.typeIcon,
         );
 
         rooms.push(finalRoom);
@@ -227,10 +256,16 @@ export class LocalVideoScanner {
       }
       usedIds.add(roomId);
 
-      // 演示模式：截取视频第一帧作为封面
+      // 类型图标：按文件相对路径（含子目录）关键词匹配
+      const relativePath = path.relative(this.videoDir, filePath);
+      const typeIcon = this._matchTypeIcon(relativePath);
+
+      // 演示模式：截取视频第一帧作为封面 + 中间帧作为头像
       let cover = '';
+      let avatar = '';
       if (this.demoMode) {
         cover = await this._extractCover(filePath, roomId);
+        avatar = await this._extractAvatar(filePath, roomId);
       }
 
       rooms.push(new LocalRoomData(
@@ -240,6 +275,8 @@ export class LocalVideoScanner {
         DEFAULT_USER_NAME,
         DEFAULT_ONLINE,
         filePath,
+        avatar,
+        typeIcon,
       ));
     });
 
@@ -290,6 +327,74 @@ export class LocalVideoScanner {
 
       proc.on('error', (err) => {
         CoreLog.warn(`[LocalVideoScanner] 截取封面异常: ${videoPath}, ${err.message}`);
+        resolve('');
+      });
+    });
+  }
+
+  /**
+   * 按文件名关键词匹配类型图标
+   *
+   * @param relativePath 视频文件相对 videoDir 的路径（含子目录 + 文件名）
+   * @returns 命中的 icon key，未命中返回 'default'
+   */
+  private _matchTypeIcon(relativePath: string): string {
+    const lower = relativePath.toLowerCase();
+    for (const { keys, icon } of TYPE_ICON_KEYWORDS) {
+      for (const key of keys) {
+        if (lower.includes(key.toLowerCase())) {
+          return icon;
+        }
+      }
+    }
+    return 'default';
+  }
+
+  /**
+   * 用 ffmpeg 截取视频中间帧（10 秒处）保存为 jpg，返回头像可访问的 HTTP URL
+   *
+   * 失败时记录警告并返回空字符串，不阻断扫描流程。
+   * 视频不足 10 秒时 ffmpeg 会失败，头像降级为空。
+   */
+  private async _extractAvatar(videoPath: string, roomId: string): Promise<string> {
+    // 无头像目录或基础 URL，直接返回空
+    if (!this.avatarDir || !this.avatarBaseUrl) {
+      return '';
+    }
+
+    // 确保 avatarDir 存在
+    try {
+      await fs.mkdir(this.avatarDir, { recursive: true });
+    } catch {
+      CoreLog.warn(`[LocalVideoScanner] 创建头像目录失败: ${this.avatarDir}`);
+      return '';
+    }
+
+    const avatarFileName = `${roomId}.jpg`;
+    const avatarPath = path.join(this.avatarDir, avatarFileName);
+
+    return new Promise<string>((resolve) => {
+      const proc = spawn(this.ffmpegPath, [
+        '-ss', '10',
+        '-i', videoPath,
+        '-frames:v', '1',
+        '-q:v', '2',
+        '-f', 'image2',
+        '-y',
+        avatarPath,
+      ], { stdio: ['ignore', 'ignore', 'ignore'] });
+
+      proc.on('exit', (code) => {
+        if (code === 0) {
+          resolve(`${this.avatarBaseUrl}/${avatarFileName}`);
+        } else {
+          CoreLog.warn(`[LocalVideoScanner] 截取头像失败: ${videoPath}, exitCode=${code}`);
+          resolve('');
+        }
+      });
+
+      proc.on('error', (err) => {
+        CoreLog.warn(`[LocalVideoScanner] 截取头像异常: ${videoPath}, ${err.message}`);
         resolve('');
       });
     });

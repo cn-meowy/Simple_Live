@@ -123,6 +123,21 @@ class LocalStorageService extends GetxService {
   /// 开启多线程更新关注
   static const String kUpdateFollowThreadCount = "UpdateFollowThreadCount";
 
+  /// 自建服务端地址
+  static const String kServerUrl = "ServerUrl";
+
+  /// 是否启用自建服务端（控制直播接口是否走服务端）
+  static const String kServerEnable = "ServerEnable";
+
+  /// 是否启用服务端数据自动同步
+  static const String kServerSyncEnable = "ServerSyncEnable";
+
+  /// 最后一次服务端同步时间
+  static const String kServerLastSyncTime = "ServerLastSyncTime";
+
+  /// 抖音cookie
+  static const String kDouyinCookie = "DouyinCookie";
+
   late Box settingsBox;
   late Box<String> shieldBox;
 

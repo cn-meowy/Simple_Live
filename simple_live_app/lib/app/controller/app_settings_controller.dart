@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:simple_live_app/app/constant.dart';
 import 'package:simple_live_app/app/log.dart';
+import 'package:simple_live_app/app/services/live_api_factory.dart';
 import 'package:simple_live_app/app/sites.dart';
+import 'package:simple_live_app/app/utils/server_url_util.dart';
 import 'package:simple_live_app/services/local_storage_service.dart';
 
 import 'package:flutter/material.dart';
@@ -156,8 +158,6 @@ class AppSettingsController extends GetxController {
     // 服务端相关配置
     serverUrl.value = LocalStorageService.instance
         .getValue(LocalStorageService.kServerUrl, "");
-    serverEnable.value = LocalStorageService.instance
-        .getValue(LocalStorageService.kServerEnable, false);
     serverSyncEnable.value = LocalStorageService.instance
         .getValue(LocalStorageService.kServerSyncEnable, false);
     serverLastSyncTime.value = LocalStorageService.instance
@@ -167,6 +167,14 @@ class AppSettingsController extends GetxController {
     initHomeSort();
 
     super.onInit();
+
+    // 预热 LiveApi：若已配置本机服务端地址则提前启动内嵌服务，
+    // 避免首页加载推荐时才异步启动造成延迟。
+    if (serverUrl.value.isNotEmpty) {
+      LiveApiFactory.instanceAsync.catchError((e) {
+        Log.logPrint(e);
+      });
+    }
   }
 
   void initSiteSort() {
@@ -547,17 +555,17 @@ class AppSettingsController extends GetxController {
   /// 服务端地址
   var serverUrl = "".obs;
   void setServerUrl(String e) {
-    serverUrl.value = e;
+    // 兜底规范化：修复 iOS 键盘吞冒号、补 scheme、去尾斜杠。
+    // 输入非法（非 http/https scheme）时保留原值，避免抛错中断 UI。
+    String normalized;
+    try {
+      normalized = ServerUrlUtil.normalize(e);
+    } catch (_) {
+      normalized = e.trim();
+    }
+    serverUrl.value = normalized;
     LocalStorageService.instance
-        .setValue(LocalStorageService.kServerUrl, e);
-  }
-
-  /// 是否启用服务端（控制直播接口是否走服务端）
-  var serverEnable = false.obs;
-  void setServerEnable(bool e) {
-    serverEnable.value = e;
-    LocalStorageService.instance
-        .setValue(LocalStorageService.kServerEnable, e);
+        .setValue(LocalStorageService.kServerUrl, normalized);
   }
 
   /// 是否启用数据自动同步

@@ -31,6 +31,10 @@ import 'package:simple_live_app/modules/mine/account/bilibili/qr_login_controlle
 import 'package:simple_live_app/modules/mine/account/bilibili/qr_login_page.dart';
 import 'package:simple_live_app/modules/mine/account/bilibili/web_login_controller.dart';
 import 'package:simple_live_app/modules/mine/account/bilibili/web_login_page.dart';
+import 'package:simple_live_app/modules/mine/account/generic_cookie_login_page.dart';
+import 'package:simple_live_app/modules/mine/account/generic_qr_login_controller.dart';
+import 'package:simple_live_app/modules/mine/account/generic_qr_login_page.dart';
+import 'package:simple_live_app/modules/mine/account/generic_username_page.dart';
 import 'package:simple_live_app/modules/settings/appstyle_setting_page.dart';
 import 'package:simple_live_app/modules/settings/auto_exit_settings_page.dart';
 import 'package:simple_live_app/modules/settings/danmu_settings_page.dart';
@@ -44,10 +48,21 @@ import 'package:simple_live_app/modules/settings/indexed_settings/indexed_settin
 import 'package:simple_live_app/modules/settings/indexed_settings/indexed_settings_page.dart';
 import 'package:simple_live_app/modules/settings/other/other_settings_controller.dart';
 import 'package:simple_live_app/modules/settings/other/other_settings_page.dart';
+import 'package:simple_live_app/modules/settings/agreement/agreement_page.dart';
 import 'package:simple_live_app/modules/settings/play_settings_page.dart';
 
 import '../modules/indexed/indexed_page.dart';
 import 'route_path.dart';
+
+import 'package:simple_live_app/models/account/site_account_descriptor.dart';
+
+SiteAccountDescriptor _descriptorFromParams(String label, String hint) {
+  return SiteAccountDescriptor(
+    type: SiteAccountType.username,
+    label: label,
+    hint: hint,
+  );
+}
 
 class AppPages {
   AppPages._();
@@ -174,6 +189,36 @@ class AppPages {
         BindingsBuilder.put(() => BiliBiliQRLoginController()),
       ],
     ),
+    // 通用站点扫码登录（重构后的入口）
+    GetPage(
+      name: RoutePath.kSiteAccountQR,
+      page: () => const GenericQRLoginPage(),
+      binding: BindingsBuilder.put(
+        () => GenericQRLoginController(siteId: Get.parameters['siteId'] ?? ''),
+      ),
+    ),
+    // 通用站点 Cookie 配置
+    GetPage(
+      name: RoutePath.kSiteAccountCookie,
+      page: () => const GenericCookieLoginPage(),
+      binding: BindingsBuilder.put(
+        () => GenericCookieLoginController(siteId: Get.parameters['siteId'] ?? ''),
+      ),
+    ),
+    // 通用站点用户名配置
+    GetPage(
+      name: RoutePath.kSiteAccountUsername,
+      page: () => const GenericUsernamePage(),
+      binding: BindingsBuilder.put(
+        () => GenericUsernameController(
+          siteId: Get.parameters['siteId'] ?? '',
+          descriptor: _descriptorFromParams(
+            Get.parameters['label'] ?? '用户名',
+            Get.parameters['hint'] ?? '',
+          ),
+        ),
+      ),
+    ),
     // 数据同步
     GetPage(
       name: RoutePath.kSync,
@@ -259,6 +304,17 @@ class AppPages {
     GetPage(
       name: RoutePath.kSettingsServer,
       page: () => const ServerSettingsPage(),
+    ),
+    //用户协议 / 隐私协议
+    GetPage(
+      name: RoutePath.kSettingsAgreement,
+      page: () {
+        final args = Get.arguments as Map;
+        return AgreementPage(
+          title: args['title'] as String,
+          assetPath: args['assetPath'] as String,
+        );
+      },
     ),
   ];
 }

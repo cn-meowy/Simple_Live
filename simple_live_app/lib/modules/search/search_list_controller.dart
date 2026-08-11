@@ -28,10 +28,12 @@ class SearchListController extends BasePageController {
     }
     if (searchMode.value == 1) {
       // 搜索主播
-      var result = await LiveApiFactory.instance.searchAnchors(site.id, keyword, page: page);
+      var result = await (await LiveApiFactory.instanceAsync)
+          .searchAnchors(site.id, keyword, page: page);
       return result.items;
     }
-    var result = await LiveApiFactory.instance.searchRooms(site.id, keyword, page: page);
+    var result = await (await LiveApiFactory.instanceAsync)
+        .searchRooms(site.id, keyword, page: page);
 
     return result.items;
   }

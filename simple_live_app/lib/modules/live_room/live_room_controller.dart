@@ -25,7 +25,7 @@ import 'package:simple_live_app/services/db_service.dart';
 import 'package:simple_live_app/services/follow_service.dart';
 import 'package:simple_live_app/widgets/desktop_refresh_button.dart';
 import 'package:simple_live_app/widgets/follow_user_item.dart';
-import 'package:simple_live_core/simple_live_core.dart';
+import 'package:simple_live_app/core/simple_live_core.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -39,7 +39,7 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
   }) {
     rxSite = pSite.obs;
     rxRoomId = pRoomId.obs;
-    liveDanmaku = LiveApiFactory.instance.getDanmaku(site.id);
+    liveDanmaku = LiveApiFactory.getDanmaku(site.id);
     // 抖音应该默认是竖屏的
     if (site.id == "douyin") {
       isVertical.value = true;
@@ -200,6 +200,14 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     liveDanmaku.onMessage = onWSMessage;
     liveDanmaku.onClose = onWSClose;
     liveDanmaku.onReady = onWSReady;
+    // 本地演示平台无真实弹幕协议，no-op LiveDanmaku 不会自行触发 onReady。
+    // 这里手动触发一次，使聊天栏出现 "弹幕服务器连接正常" 系统消息，
+    // 与服务端 LocalDanmaku 的行为对齐。
+    if (site.id == Constant.kLocal) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        liveDanmaku.onReady?.call();
+      });
+    }
   }
 
   /// 接收到WebSocket信息
@@ -286,7 +294,8 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
       error = null;
       update();
       addSysMsg("正在读取直播间信息");
-      detail.value = await LiveApiFactory.instance.getRoomDetail(site.id, roomId);
+      detail.value = await (await LiveApiFactory.instanceAsync)
+          .getRoomDetail(site.id, roomId);
 
       if (site.id == Constant.kDouyin) {
         // 1.6.0之前收藏的WebRid
@@ -348,8 +357,8 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     currentQuality = -1;
 
     try {
-      var playQualites =
-          await LiveApiFactory.instance.getPlayQualites(site.id, detail.value!);
+      var playQualites = await (await LiveApiFactory.instanceAsync)
+          .getPlayQualites(site.id, detail.value!);
 
       if (playQualites.isEmpty) {
         SmartDialog.showToast("无法读取播放清晰度");
@@ -395,8 +404,8 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     currentQualityInfo.value = qualites[currentQuality].quality;
     currentLineInfo.value = "";
     currentLineIndex = -1;
-    var playUrl = await site.liveSite
-        .getPlayUrls(detail: detail.value!, quality: qualites[currentQuality]);
+    var playUrl = await (await LiveApiFactory.instanceAsync).getPlayUrls(
+        site.id, detail.value!, qualites[currentQuality]);
     if (playUrl.urls.isEmpty) {
       SmartDialog.showToast("无法读取播放地址");
       return;
@@ -497,8 +506,8 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
   /// 读取SC
   void getSuperChatMessage() async {
     try {
-      var sc =
-          await LiveApiFactory.instance.getSuperChatMessage(site.id, detail.value!.roomId);
+      var sc = await (await LiveApiFactory.instanceAsync)
+          .getSuperChatMessage(site.id, detail.value!.roomId);
       superChats.addAll(sc);
     } catch (e) {
       Log.logPrint(e);
@@ -592,8 +601,8 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     if (!liveStatus.value) {
       return;
     }
-    var playUrl = await site.liveSite
-        .getPlayUrls(detail: detail.value!, quality: qualites[currentQuality]);
+    var playUrl = await (await LiveApiFactory.instanceAsync).getPlayUrls(
+        site.id, detail.value!, qualites[currentQuality]);
     if (playUrl.urls.isEmpty) {
       SmartDialog.showToast("无法读取播放地址");
       return;
@@ -985,7 +994,7 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     danmakuController?.clear();
 
     // 重新设置LiveDanmaku
-    liveDanmaku = LiveApiFactory.instance.getDanmaku(site.id);
+    liveDanmaku = LiveApiFactory.getDanmaku(site.id);
 
     // 停止播放
     await player.stop();

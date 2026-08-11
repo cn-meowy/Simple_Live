@@ -11,7 +11,7 @@ import 'package:simple_live_app/models/sync_client_info_model.dart';
 import 'package:simple_live_app/routes/route_path.dart';
 import 'package:simple_live_app/services/bilibili_account_service.dart';
 import 'package:simple_live_app/services/sync_service.dart';
-import 'package:simple_live_core/simple_live_core.dart';
+import 'package:simple_live_app/core/simple_live_core.dart';
 
 /// APP页面跳转封装
 /// * 需要参数的页面都应使用此类

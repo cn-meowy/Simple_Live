@@ -128,7 +128,7 @@ class SyncService extends GetxService {
   }
 
   Future<String> getDeviceName() async {
-    var name = "SimpleLive-${Platform.operatingSystem}";
+    var name = "MeowLive-${Platform.operatingSystem}";
     if (Platform.isAndroid) {
       var info = await deviceInfo.androidInfo;
       name = info.model;

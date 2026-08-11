@@ -1,6 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:simple_live_app/app/sites.dart';
 import 'package:simple_live_app/requests/http_client.dart';
-import 'package:simple_live_core/simple_live_core.dart';
+import 'package:simple_live_app/core/simple_live_core.dart';
 
 import 'live_api_service.dart';
 
@@ -12,6 +13,75 @@ class RemoteLiveApi implements LiveApiService {
   final String baseUrl;
 
   RemoteLiveApi(this.baseUrl);
+
+  @override
+  Future<List<Map<String, dynamic>>> getSites() async {
+    final result = await _getJson('/api/v1/sites');
+    final list = result['data'] as List<dynamic>;
+    return list.map((e) {
+      final m = e as Map<String, dynamic>;
+      return <String, dynamic>{
+        'id': m['id']?.toString() ?? '',
+        'name': m['name']?.toString() ?? '',
+        // 同时透传 account 描述符（sites_service 会解析为 SiteAccountDescriptor）
+        if (m['account'] != null) 'account': m['account'],
+      };
+    }).toList();
+  }
+
+  /// 生成扫码登录二维码（仅支持 siteId == 'bilibili'）
+  Future<({String qrcodeKey, String qrImageBase64})> generateSiteQR(
+    String siteId,
+  ) async {
+    final result = await _postJson(
+      '/api/v1/sites/$siteId/account/qr/generate',
+    );
+    final data = result['data'] as Map<String, dynamic>;
+    return (
+      qrcodeKey: data['qrcodeKey'] as String,
+      qrImageBase64: data['qrImageBase64'] as String,
+    );
+  }
+
+  /// 轮询扫码登录状态
+  ///
+  /// 返回 status: unscanned | scanned | confirmed | expired
+  Future<({String status, String? cookie})> pollSiteQR(
+    String siteId,
+    String qrcodeKey,
+  ) async {
+    final result = await _getJson(
+      '/api/v1/sites/$siteId/account/qr/poll?qrcodeKey=$qrcodeKey',
+    );
+    final data = result['data'] as Map<String, dynamic>;
+    return (
+      status: data['status'] as String,
+      cookie: data['cookie'] as String?,
+    );
+  }
+
+  /// 读取指定站点的用户名
+  Future<String?> getSiteUsername(String siteId) async {
+    final result = await _getJson('/api/v1/sites/$siteId/account/username');
+    final data = result['data'] as Map<String, dynamic>;
+    final username = data['username'] as String? ?? '';
+    return username.isEmpty ? null : username;
+  }
+
+  /// 写入指定站点的用户名
+  Future<void> setSiteUsername(String siteId, String username) async {
+    await _postJson(
+      '/api/v1/sites/$siteId/account/username',
+      data: {'username': username},
+    );
+  }
+
+  /// 删除指定站点的用户名
+  Future<void> deleteSiteUsername(String siteId) async {
+    await HttpClient.instance.dio.delete(
+      '$baseUrl/api/v1/sites/$siteId/account/username',
+    );
+  }
 
   @override
   Future<List<LiveCategory>> getCategores(String siteId) async {
@@ -49,7 +119,7 @@ class RemoteLiveApi implements LiveApiService {
   @override
   Future<LiveRoomDetail> getRoomDetail(String siteId, String roomId) async {
     final result = await _getJson('/api/v1/sites/$siteId/rooms/$roomId');
-    return _roomDetailFromJson(result['data'] as Map<String, dynamic>);
+    return roomDetailFromJson(result['data'] as Map<String, dynamic>);
   }
 
   @override
@@ -85,8 +155,12 @@ class RemoteLiveApi implements LiveApiService {
   LiveDanmaku getDanmaku(String siteId) {
     // 弹幕始终使用 simple_live_core 的 LiveDanmaku，不走服务端中转
     final site = Sites.allSites[siteId];
-    if (site == null) throw ArgumentError('不支持的平台: $siteId');
-    return site.liveSite.getDanmaku();
+    final liveSite = site?.liveSite;
+    if (liveSite != null) {
+      return liveSite.getDanmaku();
+    }
+    // 未知平台返回 no-op，避免崩溃
+    return LiveDanmaku();
   }
 
   // ============ HTTP 请求辅助方法 ============
@@ -105,31 +179,33 @@ class RemoteLiveApi implements LiveApiService {
     return LiveCategory(
       id: json['id'] as String,
       name: json['name'] as String,
-      children: (json['children'] as List<dynamic>).map((e) => _subCategoryFromJson(e as Map<String, dynamic>)).toList(),
+      children: (json['children'] as List<dynamic>).map((e) => subCategoryFromJson(e as Map<String, dynamic>)).toList(),
     );
   }
 
-  LiveSubCategory _subCategoryFromJson(Map<String, dynamic> json) {
+  @visibleForTesting
+  LiveSubCategory subCategoryFromJson(Map<String, dynamic> json) {
     return LiveSubCategory(
       id: json['id'] as String,
       name: json['name'] as String,
       parentId: json['parentId'] as String,
-      pic: json['pic'] as String? ?? '',
+      pic: resolveUrl(json['pic'] as String? ?? ''),
     );
   }
 
   LiveCategoryResult _categoryResultFromJson(Map<String, dynamic> json) {
     return LiveCategoryResult(
       hasMore: json['hasMore'] as bool,
-      items: (json['items'] as List<dynamic>).map((e) => _roomItemFromJson(e as Map<String, dynamic>)).toList(),
+      items: (json['items'] as List<dynamic>).map((e) => roomItemFromJson(e as Map<String, dynamic>)).toList(),
     );
   }
 
-  LiveRoomItem _roomItemFromJson(Map<String, dynamic> json) {
+  @visibleForTesting
+  LiveRoomItem roomItemFromJson(Map<String, dynamic> json) {
     return LiveRoomItem(
       roomId: json['roomId'] as String,
       title: json['title'] as String,
-      cover: json['cover'] as String,
+      cover: resolveUrl(json['cover'] as String),
       userName: json['userName'] as String,
       online: (json['online'] as num?)?.toInt() ?? 0,
     );
@@ -138,33 +214,35 @@ class RemoteLiveApi implements LiveApiService {
   LiveSearchRoomResult _searchRoomResultFromJson(Map<String, dynamic> json) {
     return LiveSearchRoomResult(
       hasMore: json['hasMore'] as bool,
-      items: (json['items'] as List<dynamic>).map((e) => _roomItemFromJson(e as Map<String, dynamic>)).toList(),
+      items: (json['items'] as List<dynamic>).map((e) => roomItemFromJson(e as Map<String, dynamic>)).toList(),
     );
   }
 
   LiveSearchAnchorResult _searchAnchorResultFromJson(Map<String, dynamic> json) {
     return LiveSearchAnchorResult(
       hasMore: json['hasMore'] as bool,
-      items: (json['items'] as List<dynamic>).map((e) => _anchorItemFromJson(e as Map<String, dynamic>)).toList(),
+      items: (json['items'] as List<dynamic>).map((e) => anchorItemFromJson(e as Map<String, dynamic>)).toList(),
     );
   }
 
-  LiveAnchorItem _anchorItemFromJson(Map<String, dynamic> json) {
+  @visibleForTesting
+  LiveAnchorItem anchorItemFromJson(Map<String, dynamic> json) {
     return LiveAnchorItem(
       roomId: json['roomId'] as String,
       userName: json['userName'] as String,
-      avatar: json['avatar'] as String,
+      avatar: resolveUrl(json['avatar'] as String),
       liveStatus: json['liveStatus'] as bool,
     );
   }
 
-  LiveRoomDetail _roomDetailFromJson(Map<String, dynamic> json) {
+  @visibleForTesting
+  LiveRoomDetail roomDetailFromJson(Map<String, dynamic> json) {
     return LiveRoomDetail(
       roomId: json['roomId'] as String,
       title: json['title'] as String,
-      cover: json['cover'] as String,
+      cover: resolveUrl(json['cover'] as String),
       userName: json['userName'] as String,
-      userAvatar: json['userAvatar'] as String,
+      userAvatar: resolveUrl(json['userAvatar'] as String),
       online: (json['online'] as num?)?.toInt() ?? 0,
       introduction: json['introduction'] as String?,
       notice: json['notice'] as String?,
@@ -214,11 +292,34 @@ class RemoteLiveApi implements LiveApiService {
   }
 
   LivePlayUrl _playUrlFromJson(Map<String, dynamic> json) {
+    final rawUrls = List<String>.from(json['urls'] as List);
     return LivePlayUrl(
-      urls: List<String>.from(json['urls'] as List),
+      urls: rawUrls.map(_resolveUrl).toList(),
       headers: Map<String, String>.from(json['headers'] as Map),
     );
   }
+
+  /// 解析服务端返回的播放地址。
+  ///
+  /// `local` 等服务端转封装平台返回的是相对路径
+  /// （如 `/api/v1/stream/hls/{id}/play.m3u8`），需用当前 [baseUrl] 拼接成完整 URL，
+  /// 避免后端 `0.0.0.0` 监听地址问题。参考 apple-tv 端 LiveRoomViewModel.loadLine。
+  /// 绝对地址（`http://`/`https://`）原样保留。
+  @visibleForTesting
+  String resolveUrl(String url) {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    if (url.startsWith('/')) {
+      final base = baseUrl.endsWith('/')
+          ? baseUrl.substring(0, baseUrl.length - 1)
+          : baseUrl;
+      return '$base$url';
+    }
+    return url;
+  }
+
+  String _resolveUrl(String url) => resolveUrl(url);
 
   LiveSuperChatMessage _superChatFromJson(Map<String, dynamic> json) {
     return LiveSuperChatMessage(

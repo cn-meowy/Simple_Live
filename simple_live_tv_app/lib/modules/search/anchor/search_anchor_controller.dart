@@ -4,6 +4,7 @@ import 'package:simple_live_core/simple_live_core.dart';
 import 'package:simple_live_tv_app/app/app_focus_node.dart';
 import 'package:simple_live_tv_app/app/constant.dart';
 import 'package:simple_live_tv_app/app/controller/base_controller.dart';
+import 'package:simple_live_tv_app/app/services/live_api_factory.dart';
 import 'package:simple_live_tv_app/app/sites.dart';
 
 class SearchAnchorController extends BasePageController<LiveAnchorItemExt> {
@@ -34,7 +35,7 @@ class SearchAnchorController extends BasePageController<LiveAnchorItemExt> {
 
   @override
   Future<List<LiveAnchorItemExt>> getData(int page, int pageSize) async {
-    var result = await site.liveSite.searchAnchors(keyword, page: page);
+    var result = await LiveApiFactory.instance.searchAnchors(site.id, keyword, page: page);
 
     return result.items
         .map((e) => LiveAnchorItemExt(

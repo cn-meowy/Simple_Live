@@ -2,7 +2,7 @@ import 'package:get/get.dart';
 import 'package:simple_live_app/app/controller/base_controller.dart';
 import 'package:simple_live_app/app/services/live_api_factory.dart';
 import 'package:simple_live_app/app/sites.dart';
-import 'package:simple_live_core/simple_live_core.dart';
+import 'package:simple_live_app/core/simple_live_core.dart';
 
 class CategoryListController extends BasePageController<AppLiveCategory> {
   final Site site;
@@ -10,7 +10,7 @@ class CategoryListController extends BasePageController<AppLiveCategory> {
 
   @override
   Future<List<AppLiveCategory>> getData(int page, int pageSize) async {
-    var result = await LiveApiFactory.instance.getCategores(site.id);
+    var result = await (await LiveApiFactory.instanceAsync).getCategores(site.id);
 
     return result.map((e) => AppLiveCategory.fromLiveCategory(e)).toList();
   }

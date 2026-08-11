@@ -52,9 +52,14 @@ class ServerSyncService extends GetxService {
   String get _serverUrl => AppSettingsController.instance.serverUrl.value;
 
   /// 获取设备 ID（用于数据分区）
-  String get _deviceId => LocalStorageService.instance
-      .getValue(LocalStorageService.kFirstRun, true)
-      .toString();
+  String get _deviceId {
+    _cachedDeviceId ??= LocalStorageService.instance
+        .getValue(LocalStorageService.kFirstRun, true)
+        .toString();
+    return _cachedDeviceId!;
+  }
+
+  String? _cachedDeviceId;
 
   /// 检测服务端可用性
   Future<bool> checkServerAvailable() async {

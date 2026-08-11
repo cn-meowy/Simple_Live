@@ -44,6 +44,9 @@ export class ServerConfig {
   /** 封面图片存储目录（演示模式截取视频第一帧保存位置） */
   readonly coverDir: string;
 
+  /** 头像图片存储目录（演示模式截取视频中间帧保存位置） */
+  readonly avatarDir: string;
+
   /** 同步数据 SQLite 数据库路径（为空则纯内存模式，不持久化） */
   readonly syncDbPath: string;
 
@@ -61,6 +64,7 @@ export class ServerConfig {
     localVideoDir?: string;
     localDataFile?: string;
     coverDir?: string;
+    avatarDir?: string;
     syncDbPath?: string;
   } = {}) {
     this.port = options.port ?? 8080;
@@ -76,6 +80,7 @@ export class ServerConfig {
     this.localVideoDir = options.localVideoDir ?? '/data/videos';
     this.localDataFile = options.localDataFile ?? '';
     this.coverDir = options.coverDir ?? '/tmp/live_stream/covers';
+    this.avatarDir = options.avatarDir ?? '/tmp/live_stream/avatars';
     this.syncDbPath = options.syncDbPath ?? '';
   }
 
@@ -112,6 +117,7 @@ export class ServerConfig {
       localVideoDir: env.LOCAL_VIDEO_DIR ?? '/data/videos',
       localDataFile: env.LOCAL_DATA_FILE ?? '',
       coverDir: env.COVER_DIR ?? '/tmp/live_stream/covers',
+      avatarDir: env.AVATAR_DIR ?? '/tmp/live_stream/avatars',
       syncDbPath: env.SYNC_DB_PATH ?? '/data/sync_data.db',
     });
   }

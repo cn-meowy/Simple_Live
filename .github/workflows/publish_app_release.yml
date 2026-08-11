@@ -3,7 +3,7 @@ name: app-build-action
 on:
   push:
     tags:
-      - "v*"
+      - "app_v*"
 jobs:
   build-mac-ios-android:
     runs-on: macos-latest
@@ -13,9 +13,15 @@ jobs:
       #签出代码
       - uses: actions/checkout@v4
         with:
-          ref: master
+          ref: main
 
       #APK签名设置
+      - name: Check keystore secret
+        run: |
+          if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "::error::Secret KEYSTORE_BASE64 未配置。请在仓库 Settings → Secrets 添加 keystore 的 base64 值。"
+            exit 1
+          fi
       - name: Download Android keystore
         id: android_keystore
         uses: timheuer/base64-to-file@v1.2
@@ -61,11 +67,26 @@ jobs:
       - name: Install flutter_distributor
         run: dart pub global activate flutter_distributor
 
+      #获取版本信息（自动从 Git Tag 提取，去掉 app_v 前缀）
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/app_v}" >> $GITHUB_OUTPUT
+      - name: Echo version
+        run: echo "${{ steps.version.outputs.VERSION }}"
+
       #打包APK
       - name: Build APK
         run: |
           cd simple_live_app
           flutter build apk --release --split-per-abi
+
+      #重命名APK
+      - name: Rename APK
+        run: |
+          cd simple_live_app/build/app/outputs/flutter-apk
+          mv app-armeabi-v7a-release.apk MeowLive-android-armeabi-v7a-${{ steps.version.outputs.VERSION }}.apk
+          mv app-arm64-v8a-release.apk MeowLive-android-arm64-v8a-${{ steps.version.outputs.VERSION }}.apk
+          mv app-x86_64-release.apk MeowLive-android-x86_64-${{ steps.version.outputs.VERSION }}.apk
 
       #上传APK至Artifacts
       - name: Upload APK to Artifacts
@@ -73,9 +94,9 @@ jobs:
         with:
           name: android
           path: |
-            simple_live_app/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
-            simple_live_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-            simple_live_app/build/app/outputs/flutter-apk/app-x86_64-release.apk
+            simple_live_app/build/app/outputs/flutter-apk/MeowLive-android-armeabi-v7a-${{ steps.version.outputs.VERSION }}.apk
+            simple_live_app/build/app/outputs/flutter-apk/MeowLive-android-arm64-v8a-${{ steps.version.outputs.VERSION }}.apk
+            simple_live_app/build/app/outputs/flutter-apk/MeowLive-android-x86_64-${{ steps.version.outputs.VERSION }}.apk
 
       #打包iOS
       - name: Build IPA
@@ -91,6 +112,7 @@ jobs:
           cp -R build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload/Runner.app
           cd build/ios/iphoneos/
           zip -q -r ios_no_sign.ipa Payload
+          mv ios_no_sign.ipa MeowLive-ios-${{ steps.version.outputs.VERSION }}.ipa
           cd ../../..
 
       #上传IPA至Artifacts
@@ -99,7 +121,7 @@ jobs:
         with:
           name: ios
           path: |
-            simple_live_app/build/ios/iphoneos/ios_no_sign.ipa
+            simple_live_app/build/ios/iphoneos/MeowLive-ios-${{ steps.version.outputs.VERSION }}.ipa
 
       # 打包MAC
       - name: Build MacOS
@@ -107,37 +129,37 @@ jobs:
           cd simple_live_app
           flutter_distributor package --platform macos --targets dmg,zip --skip-clean
 
+      #重命名MAC产物
+      - name: Rename MacOS artifacts
+        run: |
+          cd simple_live_app/build/dist
+          find . -name '*.dmg' | head -1 | xargs -I{} mv {} MeowLive-macos-${{ steps.version.outputs.VERSION }}.dmg
+          find . -name '*.zip' | head -1 | xargs -I{} mv {} MeowLive-macos-${{ steps.version.outputs.VERSION }}.zip
+
       # 上传MAC至Artifacts
       - name: Upload MacOS to Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: mac
           path: |
-            simple_live_app/build/dist/*/*.dmg
-            simple_live_app/build/dist/*/*.zip
-
-      #获取版本信息（自动从 Git Tag 提取）
-      - name: Get version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-      - name: Echo version
-        run: echo "${{ steps.version.outputs.VERSION }}"
+            simple_live_app/build/dist/MeowLive-macos-${{ steps.version.outputs.VERSION }}.dmg
+            simple_live_app/build/dist/MeowLive-macos-${{ steps.version.outputs.VERSION }}.zip
 
       #上传至Release
       - name: Upload Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: "${{ steps.version.outputs.VERSION }}"
           generate_release_notes: true
           prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
-          token: ${{ secrets.TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           files: |
-            simple_live_app/build/app/outputs/flutter-apk/app-x86_64-release.apk
-            simple_live_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-            simple_live_app/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
-            simple_live_app/build/ios/iphoneos/ios_no_sign.ipa
-            simple_live_app/build/dist/*/*.dmg
-            simple_live_app/build/dist/*/*.zip
+            simple_live_app/build/app/outputs/flutter-apk/MeowLive-android-x86_64-${{ steps.version.outputs.VERSION }}.apk
+            simple_live_app/build/app/outputs/flutter-apk/MeowLive-android-arm64-v8a-${{ steps.version.outputs.VERSION }}.apk
+            simple_live_app/build/app/outputs/flutter-apk/MeowLive-android-armeabi-v7a-${{ steps.version.outputs.VERSION }}.apk
+            simple_live_app/build/ios/iphoneos/MeowLive-ios-${{ steps.version.outputs.VERSION }}.ipa
+            simple_live_app/build/dist/MeowLive-macos-${{ steps.version.outputs.VERSION }}.dmg
+            simple_live_app/build/dist/MeowLive-macos-${{ steps.version.outputs.VERSION }}.zip
       #完成
       - run: echo "🍏 This job's status is ${{ job.status }}."
 
@@ -150,7 +172,7 @@ jobs:
       # 签出代码
       - uses: actions/checkout@v4
         with:
-          ref: master
+          ref: main
       # 设置Flutter环境
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -173,38 +195,43 @@ jobs:
       # 设置flutter_distributor环境
       - name: Install flutter_distributor
         run: dart pub global activate flutter_distributor
+      #获取版本信息（自动从 Git Tag 提取，去掉 app_v 前缀）
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/app_v}" >> $GITHUB_OUTPUT
+      - name: Echo version
+        run: echo "${{ steps.version.outputs.VERSION }}"
       # build Linux ZIP\DMG
       - name: Build Linux
         run: |
           cd simple_live_app
           flutter_distributor package --platform linux --targets deb,zip --skip-clean
+      #重命名Linux产物
+      - name: Rename Linux artifacts
+        run: |
+          cd simple_live_app/build/dist
+          find . -name '*.deb' | head -1 | xargs -I{} mv {} MeowLive-linux-${{ steps.version.outputs.VERSION }}.deb
+          find . -name '*.zip' | head -1 | xargs -I{} mv {} MeowLive-linux-${{ steps.version.outputs.VERSION }}.zip
       # 上传Linux包至Artifacts
       - name: Upload Linux APP to Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux
           path: |
-            simple_live_app/build/dist/*/*.deb
-            simple_live_app/build/dist/*/*.zip
-
-      #获取版本信息（自动从 Git Tag 提取）
-      - name: Get version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-      - name: Echo version
-        run: echo "${{ steps.version.outputs.VERSION }}"
+            simple_live_app/build/dist/MeowLive-linux-${{ steps.version.outputs.VERSION }}.deb
+            simple_live_app/build/dist/MeowLive-linux-${{ steps.version.outputs.VERSION }}.zip
 
       #上传至Release
       - name: Upload Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: "${{ steps.version.outputs.VERSION }}"
           generate_release_notes: true
           prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
-          token: ${{ secrets.TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           files: |
-            simple_live_app/build/dist/*/*.deb
-            simple_live_app/build/dist/*/*.zip
+            simple_live_app/build/dist/MeowLive-linux-${{ steps.version.outputs.VERSION }}.deb
+            simple_live_app/build/dist/MeowLive-linux-${{ steps.version.outputs.VERSION }}.zip
         #完成
       - run: echo "🍏 Linux job's status is ${{ job.status }}."
 
@@ -217,7 +244,7 @@ jobs:
       # 签出代码
       - uses: actions/checkout@v4
         with:
-          ref: master
+          ref: main
       # 设置Flutter环境
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -233,11 +260,26 @@ jobs:
       # 设置flutter_distributor环境
       - name: Install flutter_distributor
         run: dart pub global activate flutter_distributor
+      #获取版本信息（自动从 Git Tag 提取，去掉 app_v 前缀）
+      - name: Get version from tag
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF#refs/tags/app_v}" >> $GITHUB_OUTPUT
+      - name: Echo version
+        run: echo "${{ steps.version.outputs.VERSION }}"
       # build Windows ZIP\MSIX
       - name: Build Windows
         run: |
           cd simple_live_app
           flutter_distributor package --platform windows --targets msix,zip --skip-clean
+
+      #重命名Windows产物
+      - name: Rename Windows artifacts
+        shell: bash
+        run: |
+          cd simple_live_app/build/dist
+          find . -name '*.msix' | head -1 | xargs -I{} mv {} MeowLive-windows-${{ steps.version.outputs.VERSION }}.msix
+          find . -name '*.zip' | head -1 | xargs -I{} mv {} MeowLive-windows-${{ steps.version.outputs.VERSION }}.zip
 
       # 上传Windows至Artifacts
       - name: Upload Windows APP to Artifacts
@@ -245,28 +287,20 @@ jobs:
         with:
           name: windows
           path: |
-            simple_live_app/build/dist/*/*.msix
-            simple_live_app/build/dist/*/*.zip
-
-      #获取版本信息（自动从 Git Tag 提取）
-      - name: Get version from tag
-        id: version
-        shell: bash
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-      - name: Echo version
-        run: echo "${{ steps.version.outputs.VERSION }}"
+            simple_live_app/build/dist/MeowLive-windows-${{ steps.version.outputs.VERSION }}.msix
+            simple_live_app/build/dist/MeowLive-windows-${{ steps.version.outputs.VERSION }}.zip
 
       #上传至Release
       - name: Upload Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: "${{ steps.version.outputs.VERSION }}"
           generate_release_notes: true
           prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
-          token: ${{ secrets.TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           files: |
-            simple_live_app/build/dist/*/*.msix
-            simple_live_app/build/dist/*/*.zip
+            simple_live_app/build/dist/MeowLive-windows-${{ steps.version.outputs.VERSION }}.msix
+            simple_live_app/build/dist/MeowLive-windows-${{ steps.version.outputs.VERSION }}.zip
 
       #完成
       - run: echo "🍏 Windows job's status is ${{ job.status }}."

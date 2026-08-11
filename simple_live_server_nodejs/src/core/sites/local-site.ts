@@ -103,7 +103,7 @@ export class LocalLiveSite extends LiveSite {
       room.title,
       room.cover,
       room.userName,
-      '',
+      room.avatar || room.cover,  // userAvatar：优先用真实头像，为空时回退封面兜底，客户端 resolveUrl 解析为绝对 URL
       room.online,
       true,               // status：文件存在即"直播中"
       '',                 // url
@@ -127,7 +127,14 @@ export class LocalLiveSite extends LiveSite {
     ];
   }
 
-  /** 播放地址：返回本地文件路径（stream-routes 会识别并转流） */
+  /**
+   * 播放地址：返回本地文件路径（仅服务端内部使用）
+   *
+   * ⚠️ 返回值是服务器本地文件系统路径，并非可播放的 URL。
+   * 调用方（stream-routes 的 /stream/playback、room-routes 的 /play-urls）
+   * 必须先经 FfmpegStreamManager.getOrCreateLocalStream 转为 HLS URL
+   * 后才能下发给客户端，否则客户端会拿到裸路径无法播放。
+   */
   async getPlayUrls(detail: LiveRoomDetail, _quality: LivePlayQuality): Promise<LivePlayUrl> {
     const data = detail.data as { filePath?: string } | undefined;
     const filePath = data?.filePath;
@@ -152,6 +159,7 @@ export class LocalLiveSite extends LiveSite {
       room.cover,
       room.userName,
       room.online,
+      room.typeIcon,
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:simple_live_core/simple_live_core.dart';
 import 'package:simple_live_tv_app/app/app_focus_node.dart';
 import 'package:simple_live_tv_app/app/constant.dart';
 import 'package:simple_live_tv_app/app/controller/base_controller.dart';
+import 'package:simple_live_tv_app/app/services/live_api_factory.dart';
 import 'package:simple_live_tv_app/app/sites.dart';
 
 class CategoryController extends BasePageController<AppLiveCategory> {
@@ -23,7 +24,7 @@ class CategoryController extends BasePageController<AppLiveCategory> {
 
   @override
   Future<List<AppLiveCategory>> getData(int page, int pageSize) async {
-    var result = await site.liveSite.getCategores();
+    var result = await LiveApiFactory.instance.getCategores(site.id);
 
     return result.map((e) => AppLiveCategory.fromLiveCategory(e)).toList();
   }

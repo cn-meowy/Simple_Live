@@ -4,6 +4,7 @@ import 'package:simple_live_core/simple_live_core.dart';
 import 'package:simple_live_tv_app/app/app_focus_node.dart';
 import 'package:simple_live_tv_app/app/constant.dart';
 import 'package:simple_live_tv_app/app/controller/base_controller.dart';
+import 'package:simple_live_tv_app/app/services/live_api_factory.dart';
 import 'package:simple_live_tv_app/app/sites.dart';
 
 class HotliveController extends BasePageController<LiveRoomItemExt> {
@@ -32,7 +33,7 @@ class HotliveController extends BasePageController<LiveRoomItemExt> {
 
   @override
   Future<List<LiveRoomItemExt>> getData(int page, int pageSize) async {
-    var result = await site.liveSite.getRecommendRooms(page: page);
+    var result = await LiveApiFactory.instance.getRecommendRooms(site.id, page: page);
 
     return result.items
         .map((e) => LiveRoomItemExt(

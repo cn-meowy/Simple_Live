@@ -1,5 +1,6 @@
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:simple_live_tv_app/app/controller/base_controller.dart';
+import 'package:simple_live_tv_app/app/services/live_api_factory.dart';
 import 'package:simple_live_tv_app/app/sites.dart';
 import 'package:simple_live_tv_app/modules/category/category_controller.dart';
 import 'package:simple_live_tv_app/modules/hot_live/hot_live_controller.dart';
@@ -28,7 +29,7 @@ class CategoryDetailController extends BasePageController<LiveRoomItemExt> {
 
   @override
   Future<List<LiveRoomItemExt>> getData(int page, int pageSize) async {
-    var result = await site.liveSite.getCategoryRooms(subCategory, page: page);
+    var result = await LiveApiFactory.instance.getCategoryRooms(site.id, subCategory, page: page);
     return result.items
         .map(
           (e) => LiveRoomItemExt(

@@ -1,4 +1,4 @@
-platform :osx, '10.14'
+platform :osx, '10.15'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -39,5 +39,21 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
+  end
+
+  # Ensure media_kit_libs_macos_video's `Frameworks/.symlinks/mpv` exists.
+  # The podspec's `system("make")` skips regeneration when xcframeworks are
+  # already on disk, but `.symlinks` may have been deleted independently,
+  # which breaks the embed phase and causes runtime
+  # `dlopen('Mpv.framework/Mpv')` failures.
+  plugin_path = File.expand_path(
+    'Flutter/ephemeral/.symlinks/plugins/media_kit_libs_macos_video/macos',
+    __dir__
+  )
+  if File.exist?(plugin_path) && !File.exist?(File.join(plugin_path, 'Frameworks/.symlinks/mpv'))
+    Dir.chdir(plugin_path) do
+      ok = system('make')
+      raise '[media_kit] failed to regenerate Frameworks/.symlinks via make; check network/curl/shasum' unless ok
+    end
   end
 end

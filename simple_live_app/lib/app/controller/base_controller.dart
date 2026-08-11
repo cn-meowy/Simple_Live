@@ -61,44 +61,61 @@ class BasePageController<T> extends BaseController {
   var canLoadMore = false.obs;
   var list = <T>[].obs;
 
+  int _requestSequence = 0;
+  int _activeRequest = 0;
+  bool _disposed = false;
+
   Future refreshData() async {
+    final request = ++_requestSequence;
+    _activeRequest = request;
     currentPage = 1;
     list.value = [];
-    await loadData();
+    await _loadData(request, force: true);
   }
 
   Future loadData() async {
-    try {
-      if (loadding) return;
-      loadding = true;
-      pageError.value = false;
-      pageEmpty.value = false;
-      notLogin.value = false;
-      pageLoadding.value = currentPage == 1;
+    if (loadding) return;
+    final request = ++_requestSequence;
+    _activeRequest = request;
+    await _loadData(request, force: false);
+  }
 
-      var result = await getData(currentPage, pageSize);
-      //是否可以加载更多
+  Future<void> _loadData(int request, {required bool force}) async {
+    if (!force && loadding) return;
+    loadding = true;
+    pageError.value = false;
+    pageEmpty.value = false;
+    notLogin.value = false;
+    pageLoadding.value = currentPage == 1;
+
+    try {
+      final page = currentPage;
+      final result = await getData(page, pageSize);
+      if (request != _activeRequest) return;
+
       if (result.isNotEmpty) {
-        currentPage++;
+        currentPage = page + 1;
         canLoadMore.value = true;
         pageEmpty.value = false;
       } else {
         canLoadMore.value = false;
-        if (currentPage == 1) {
-          pageEmpty.value = true;
-        }
+        if (page == 1) pageEmpty.value = true;
       }
-      // 赋值数据
-      if (currentPage == 1) {
+
+      if (page == 1) {
         list.value = result;
       } else {
         list.addAll(result);
       }
     } catch (e) {
-      handleError(e, showPageError: currentPage == 1);
+      if (request == _activeRequest) {
+        handleError(e, showPageError: currentPage == 1);
+      }
     } finally {
-      loadding = false;
-      pageLoadding.value = false;
+      if (request == _activeRequest) {
+        loadding = false;
+        pageLoadding.value = false;
+      }
     }
   }
 
@@ -116,5 +133,12 @@ class BasePageController<T> extends BaseController {
     } else {
       easyRefreshController.callRefresh();
     }
+  }
+
+  void disposePageController() {
+    if (_disposed) return;
+    _disposed = true;
+    easyRefreshController.dispose();
+    scrollController.dispose();
   }
 }

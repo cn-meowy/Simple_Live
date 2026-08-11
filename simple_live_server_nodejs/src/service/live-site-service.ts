@@ -28,9 +28,54 @@ import {
   HuyaSite,
   DouyinSite,
   LocalLiveSite,
+  CoreLog,
 } from '../core/index.js';
 import { ServerConfig } from '../config/server-config.js';
 import { LocalVideoScanner } from './local-video-scanner.js';
+import { FfmpegStreamManager } from './ffmpeg-stream-manager.js';
+import { SyncDataManager } from './sync-data-manager.js';
+import { HttpClient } from '../core/common/http-client.js';
+import QRCode from 'qrcode';
+
+/**
+ * 站点账号描述符
+ *
+ * 描述前端应渲染哪种账号设置页：
+ * - qr:       二维码扫码登录
+ * - cookie:   手动输入 Cookie
+ * - username: 手动输入用户名
+ * - none:     不显示账号设置
+ */
+export interface SiteAccountDescriptor {
+  type: 'qr' | 'cookie' | 'username' | 'none';
+  label: string;
+  hint: string;
+}
+
+/**
+ * 站点信息（含账号描述符）
+ */
+export interface SiteInfo {
+  id: string;
+  name: string;
+  account: SiteAccountDescriptor | null;
+}
+
+/**
+ * QR 生成结果
+ */
+export interface QRGenerateResult {
+  qrcodeKey: string;
+  qrImageBase64: string;
+}
+
+/**
+ * QR 轮询状态
+ */
+export interface QRPollResult {
+  status: 'unscanned' | 'scanned' | 'confirmed' | 'expired';
+  cookie?: string;
+}
 
 /**
  * 直播服务层
@@ -44,12 +89,24 @@ export class LiveSiteService {
   /** 本地视频扫描器（local 平台数据源） */
   private _localScanner: LocalVideoScanner | null = null;
 
+  /** 同步数据管理器（用于 QR 登录写入 cookie） */
+  private _syncDataManager: SyncDataManager | null = null;
+
   readonly config: ServerConfig;
 
   constructor(config: ServerConfig) {
     this.config = config;
     this._initSites();
     this._initLocalSite();
+  }
+
+  /**
+   * 注入同步数据管理器（QR 登录成功后写入 cookie）
+   *
+   * 应在 app 启动时、SyncDataManager.init() 之后调用。
+   */
+  setSyncDataManager(manager: SyncDataManager): void {
+    this._syncDataManager = manager;
   }
 
   private _initSites(): void {
@@ -74,15 +131,19 @@ export class LiveSiteService {
    * - coverBaseUrl 用于拼接封面可访问的 HTTP URL
    */
   private _initLocalSite(): void {
-    // 封面使用相对路径前缀，客户端拼接自身配置的 serverURL 即可访问，
+    // 封面/头像使用相对路径前缀，客户端拼接自身配置的 serverURL 即可访问，
     // 避免后端 host 为 0.0.0.0 时客户端无法访问的问题
     const coverBaseUrl = '/api/v1/stream/covers';
+    const avatarBaseUrl = '/api/v1/stream/avatars';
     const scanner = new LocalVideoScanner(
       this.config.localVideoDir,
       this.config.localDataFile,
       this.config.demoMode,
       this.config.coverDir,
       coverBaseUrl,
+      'ffmpeg',
+      this.config.avatarDir,
+      avatarBaseUrl,
     );
     this._localScanner = scanner;
     this._sites.set('local', new LocalLiveSite(scanner));
@@ -100,24 +161,82 @@ export class LiveSiteService {
   }
 
   /**
+   * 预启动本地视频直播流（仅演示模式启动时调用）
+   *
+   * 为所有已加载的本地房间预启动 ffmpeg 直播流（持久会话），使后续点播即时播放。
+   * 单个视频失败时记录警告并跳过，不阻断整体预启动；客户端点播失败的视频时
+   * 再按现有 getOrCreateLocalStream 流程重建。
+   *
+   * @param streamManager ffmpeg 进程池管理器
+   */
+  async preWarmLocalStreams(streamManager: FfmpegStreamManager): Promise<void> {
+    if (!this._localScanner) return;
+
+    const rooms = this._localScanner.getRooms();
+    let success = 0;
+    let failed = 0;
+
+    for (const room of rooms) {
+      try {
+        await streamManager.preWarmLocalStream(room.filePath, 'local', room.roomId);
+        success++;
+      } catch (err) {
+        failed++;
+        const msg = err instanceof Error ? err.message : String(err);
+        CoreLog.warn(
+          `[LiveSiteService] 预启动直播流失败，跳过: roomId=${room.roomId}, file=${room.filePath}, ${msg}`,
+        );
+      }
+    }
+
+    CoreLog.info(
+      `[LiveSiteService] 预启动直播流完成: 成功 ${success}, 失败 ${failed}, 总计 ${rooms.length}`,
+    );
+  }
+
+  /**
    * 获取所有平台信息
    *
    * - 演示模式开启时只返回 local 平台（用于 Apple Store 审核）
    * - 非演示模式返回所有真实平台，排除 local（local 仅在演示模式下显示）
+   *
+   * 每个站点附带 `account` 描述符，描述前端应渲染哪种账号设置页。
    */
-  getSites(): Array<{ id: string; name: string }> {
+  getSites(): SiteInfo[] {
     if (this.config.demoMode) {
       const local = this._sites.get('local');
-      return local ? [{ id: local.id, name: local.name }] : [];
+      return local ? [{ id: local.id, name: local.name, account: this._getAccountDescriptor('local') }] : [];
     }
 
-    const result: Array<{ id: string; name: string }> = [];
+    const result: SiteInfo[] = [];
     for (const site of this._sites.values()) {
       // 非演示模式排除 local 平台
       if (site.id === 'local') continue;
-      result.push({ id: site.id, name: site.name });
+      result.push({
+        id: site.id,
+        name: site.name,
+        account: this._getAccountDescriptor(site.id),
+      });
     }
     return result;
+  }
+
+  /**
+   * 获取指定站点的账号描述符
+   *
+   * 返回 null 表示该站点不需要账号设置（不在账号页显示）。
+   */
+  private _getAccountDescriptor(siteId: string): SiteAccountDescriptor | null {
+    switch (siteId) {
+      case 'bilibili':
+        return { type: 'qr', label: '扫码登录', hint: '使用哔哩哔哩 App 扫码登录' };
+      case 'douyin':
+        return { type: 'cookie', label: '配置 ttwid', hint: '自定义 ttwid 可提升画质' };
+      case 'local':
+        return { type: 'username', label: '本地用户名', hint: '仅用于本地观看展示' };
+      default:
+        return null;
+    }
   }
 
   /**
@@ -230,19 +349,117 @@ export class LiveSiteService {
     return this.getSite(siteId).getDanmaku();
   }
 
+  // ============ 账号 / QR 登录 ============
+
+  /**
+   * 生成 B 站扫码登录二维码
+   *
+   * 调用 B 站 passport 接口获取 qrcode_key 和 url，
+   * 再用 qrcode 包把 url 编码为 PNG base64 data URL。
+   *
+   * 仅 siteId == 'bilibili' 时生效。
+   */
+  async generateBilibiliQR(): Promise<QRGenerateResult> {
+    const resp = await HttpClient.instance.getJson(
+      'https://passport.bilibili.com/x/passport-login/web/qrcode/generate',
+      { queryParameters: {}, header: {} },
+    );
+
+    const data = resp['data'] as Record<string, unknown> | undefined;
+    if (!data || resp['code'] !== 0) {
+      throw new Error(`B站二维码生成失败: ${resp['message'] ?? '未知错误'}`);
+    }
+
+    const qrcodeKey = data['qrcode_key'] as string;
+    const url = data['url'] as string;
+
+    // 用 qrcode 包将 url 编码为 PNG base64 data URL
+    const qrImageBase64 = await QRCode.toDataURL(url, { margin: 1, width: 300 });
+
+    return { qrcodeKey, qrImageBase64 };
+  }
+
+  /**
+   * 轮询 B 站扫码登录状态
+   *
+   * - status == 'confirmed' 时，从 set-cookie 头提取 cookie 并写入 SyncDataManager
+   * - status == 'expired' 时，客户端应重新生成二维码
+   *
+   * B 站原始 code 映射：
+   * - 0:    登录成功 → confirmed
+   * - 86038: 二维码已失效 → expired
+   * - 86090: 已扫描，待确认 → scanned
+   * - 其余:  未扫描 → unscanned
+   */
+  async pollBilibiliQR(qrcodeKey: string): Promise<QRPollResult> {
+    // 使用 axios 直接请求以获取完整响应头（HttpClient 丢弃了 set-cookie）
+    const axios = (await import('axios')).default;
+    const response = await axios.get(
+      'https://passport.bilibili.com/x/passport-login/web/qrcode/poll',
+      {
+        params: { qrcode_key: qrcodeKey },
+        timeout: 20000,
+        validateStatus: () => true,
+      },
+    );
+
+    const body = response.data as Record<string, unknown>;
+    if (body['code'] !== 0) {
+      throw new Error(`B站轮询失败: ${body['message'] ?? '未知错误'}`);
+    }
+
+    const data = body['data'] as Record<string, unknown>;
+    const code = data['code'] as number;
+
+    if (code === 0) {
+      // 登录成功：从 set-cookie 头提取 cookie
+      const setCookieHeaders = response.headers['set-cookie'] as string[] | undefined;
+      const cookies: string[] = [];
+      if (setCookieHeaders) {
+        for (const item of setCookieHeaders) {
+          const cookie = item.split(';')[0];
+          if (cookie) cookies.push(cookie);
+        }
+      }
+      const cookieStr = cookies.join(';');
+
+      // 写入 SyncDataManager（持久化 cookie）
+      if (cookieStr && this._syncDataManager) {
+        this._syncDataManager.setCookie('bilibili', cookieStr);
+      }
+
+      return { status: 'confirmed', cookie: cookieStr || undefined };
+    }
+
+    if (code === 86038) {
+      return { status: 'expired' };
+    }
+
+    if (code === 86090) {
+      return { status: 'scanned' };
+    }
+
+    return { status: 'unscanned' };
+  }
+
   // ============ 以下为 DTO 转换辅助方法 ============
 
   /**
    * LiveRoomItem -> JSON
    */
   static roomItemToJson(item: LiveRoomItem): Record<string, unknown> {
-    return {
+    const result: Record<string, unknown> = {
       roomId: item.roomId,
       title: item.title,
       cover: item.cover,
       userName: item.userName,
       online: item.online,
     };
+    // typeIcon 仅在非空时输出，保持其它平台响应结构不变
+    if (item.typeIcon) {
+      result['typeIcon'] = item.typeIcon;
+    }
+    return result;
   }
 
   /**

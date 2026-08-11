@@ -16,6 +16,12 @@ jobs:
                   ref: dev
 
             #APK签名设置
+            - name: Check keystore secret
+              run: |
+                if [ -z "${{ secrets.TV_KEYSTORE_BASE64 }}" ]; then
+                  echo "::error::Secret TV_KEYSTORE_BASE64 未配置。请在仓库 Settings → Secrets 添加 keystore 的 base64 值。"
+                  exit 1
+                fi
             - name: Download Android keystore
               id: android_tv_keystore
               uses: timheuer/base64-to-file@v1.2
@@ -49,11 +55,26 @@ jobs:
                   cd simple_live_tv_app
                   flutter pub get
 
+            #获取版本信息（自动从 Git Tag 提取，去掉 dev_tv_v 前缀）
+            - name: Get version from tag
+              id: version
+              run: echo "VERSION=${GITHUB_REF#refs/tags/dev_tv_v}" >> $GITHUB_OUTPUT
+            - name: Echo version
+              run: echo "${{ steps.version.outputs.VERSION }}"
+
             #打包APK
             - name: Build APK
               run: |
                   cd simple_live_tv_app
                   flutter build apk --release --split-per-abi
+
+            #重命名APK
+            - name: Rename APK
+              run: |
+                  cd simple_live_tv_app/build/app/outputs/flutter-apk
+                  mv app-armeabi-v7a-release.apk MeowLive-android-tv-armeabi-v7a-${{ steps.version.outputs.VERSION }}.apk
+                  mv app-arm64-v8a-release.apk MeowLive-android-tv-arm64-v8a-${{ steps.version.outputs.VERSION }}.apk
+                  mv app-x86_64-release.apk MeowLive-android-tv-x86_64-${{ steps.version.outputs.VERSION }}.apk
 
             #上传APK至Artifacts
             - name: Upload APK to Artifacts
@@ -61,8 +82,8 @@ jobs:
               with:
                   name: android_tv
                   path: |
-                      simple_live_tv_app/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
-                      simple_live_tv_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-                      simple_live_tv_app/build/app/outputs/flutter-apk/app-x86_64-release.apk
+                      simple_live_tv_app/build/app/outputs/flutter-apk/MeowLive-android-tv-armeabi-v7a-${{ steps.version.outputs.VERSION }}.apk
+                      simple_live_tv_app/build/app/outputs/flutter-apk/MeowLive-android-tv-arm64-v8a-${{ steps.version.outputs.VERSION }}.apk
+                      simple_live_tv_app/build/app/outputs/flutter-apk/MeowLive-android-tv-x86_64-${{ steps.version.outputs.VERSION }}.apk
             #完成
             - run: echo "🍏 This job's status is ${{ job.status }}."

@@ -19,6 +19,10 @@ export class LocalRoomData {
     public readonly online: number,
     /** 视频文件在服务器上的绝对路径（内部字段） */
     public readonly filePath: string,
+    /** 头像 URL（演示模式截取视频中间帧，默认空） */
+    public readonly avatar: string = '',
+    /** 类型图标 key（按文件名关键词匹配，默认 default） */
+    public readonly typeIcon: string = 'default',
   ) {}
 
   /**
@@ -32,6 +36,8 @@ export class LocalRoomData {
       String(json['userName'] ?? '本地直播'),
       typeof json['online'] === 'number' ? json['online'] : Number(json['online']) || 999,
       String(json['filePath'] ?? ''),
+      String(json['avatar'] ?? ''),
+      String(json['typeIcon'] ?? 'default'),
     );
   }
 
@@ -46,6 +52,8 @@ export class LocalRoomData {
       userName: this.userName,
       online: this.online,
       filePath: this.filePath,
+      avatar: this.avatar,
+      typeIcon: this.typeIcon,
     };
   }
 }

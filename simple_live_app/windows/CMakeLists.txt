@@ -31,6 +31,10 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
+# Suppress STL1011: MSVC 14.51 (VS 18) 将 <experimental/coroutine> 弃用升级为硬错误。
+# flutter_inappwebview_windows 与 permission_handler_windows 使用 /await + 实验性协程头，
+# 作为 transitive 插件依赖无法直接修改，故在顶层全局定义抑制宏（MSVC 官方推荐的变通方案）。
+add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
 
 # Compilation settings that should be applied to most targets.
 #

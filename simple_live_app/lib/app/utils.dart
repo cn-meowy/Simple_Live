@@ -329,21 +329,6 @@ class Utils {
     return result;
   }
 
-  static Future showStatement() async {
-    var text = await rootBundle.loadString("assets/statement.txt");
-
-    var result = await showAlertDialog(
-      text,
-      selectable: true,
-      title: "免责声明",
-      confirm: "已阅读并同意",
-      cancel: "退出",
-    );
-    if (!result) {
-      exit(0);
-    }
-  }
-
   static Future<T?> showMapOptionDialog<T>(
     Map<T, String> contents,
     T value, {

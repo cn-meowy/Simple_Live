@@ -1,13 +1,23 @@
 name: simple_live_app
 version: 1.11.4+11104
 publish_to: none
-description: "Simple Live APP"
+description: "Meow Live APP"
 environment:
   sdk: ">=3.0.5 <4.0.0"
 
 dependencies:
-  simple_live_core:
-    path: ../simple_live_core
+  # core (merged from simple_live_core)
+  dart_quickjs:
+    git:
+      url: https://github.com/xiaoyaocz/dart_quickjs
+  tars_dart:
+    path: ../simple_live_core/packages/tars_dart
+  web_socket_channel: ^3.0.1
+  html_unescape: ^2.0.0
+  protobuf: ^3.1.0
+  brotli: ^0.6.0
+  fixnum: ^1.1.0
+
   # 图标
   cupertino_icons: ^1.0.8
   remixicon: ^1.4.1 #Remix图标
@@ -20,7 +30,7 @@ dependencies:
   logger: ^2.6.2 #日志
   intl: ^0.20.2 #国际化
   qr_flutter: ^4.1.0 #二维码生成
-  dynamic_color: ^1.8.1 #动态颜色
+  dynamic_color: 1.8.1 #动态颜色（锁定：1.9.0 的 Android Kotlin DSL 迁移在 Flutter 插件构建脚本中 unresolved，详见 .kilo/plans/1786421245715-dynamic-color-gradle-dsl-fix.md）
   path: any
   collection: any
   udp: ^5.0.3 #UDP
@@ -52,7 +62,7 @@ dependencies:
   permission_handler: ^12.0.1 #权限处理
   image_gallery_saver_plus: ^4.0.1 #图片保存到相册
   screen_brightness: ^2.1.7 #亮度控制
-  auto_orientation_v2: ^2.3.6 #屏幕方向
+  auto_orientation_v2: 2.3.8 #屏幕方向（锁定版本：2.4.x 桌面端插件声明有 bug，导致 Windows/Linux/macOS 构建失败）
   wakelock_plus: ^1.4.0 #屏幕常亮
   file_picker: ^10.3.7 #文件选择
   window_manager: ^0.5.1 #窗口管理
@@ -98,7 +108,7 @@ flutter_launcher_icons:
 flutter:
   uses-material-design: true
   assets:
-    - assets/statement.txt
     - assets/images/
     - assets/icons/
     - assets/lotties/
+    - assets/agreements/

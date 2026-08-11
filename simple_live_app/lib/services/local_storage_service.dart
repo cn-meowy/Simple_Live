@@ -171,9 +171,6 @@ class LocalStorageService extends GetxService {
   /// 服务端地址
   static const String kServerUrl = "ServerUrl";
 
-  /// 是否启用服务端（控制直播接口是否走服务端）
-  static const String kServerEnable = "ServerEnable";
-
   /// 是否启用数据自动同步
   static const String kServerSyncEnable = "ServerSyncEnable";
 
@@ -195,7 +192,6 @@ class LocalStorageService extends GetxService {
   T getValue<T>(dynamic key, T defaultValue) {
     try {
       var value = settingsBox.get(key, defaultValue: defaultValue) as T;
-      Log.d("Get LocalStorage：$key\r\n$value");
       return value;
     } catch (e) {
       Log.logPrint(e);

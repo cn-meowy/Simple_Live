@@ -1,4 +1,4 @@
-display_name: Simple-Live
+display_name: Meow-Live
 package_name: simple-live
 maintainer:
   name: xiaoyaocz
@@ -10,9 +10,9 @@ essential: false
 icon: assets/logo.png
 
 keywords:
-  - Simple Live
+  - Meow Live
 
-generic_name: Simple-Live
+generic_name: Meow-Live
 
 categories:
   - Media

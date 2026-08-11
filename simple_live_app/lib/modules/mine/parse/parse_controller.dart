@@ -47,8 +47,9 @@ class ParseController extends GetxController {
     Site site = parseResult[1];
     try {
       SmartDialog.showLoading(msg: "");
-      var detail = await LiveApiFactory.instance.getRoomDetail(site.id, parseResult.first);
-      var qualites = await LiveApiFactory.instance.getPlayQualites(site.id, detail);
+      var api = await LiveApiFactory.instanceAsync;
+      var detail = await api.getRoomDetail(site.id, parseResult.first);
+      var qualites = await api.getPlayQualites(site.id, detail);
       SmartDialog.dismiss(status: SmartStatus.loading);
       if (qualites.isEmpty) {
         SmartDialog.showToast("读取直链失败,无法读取清晰度");
@@ -75,8 +76,7 @@ class ParseController extends GetxController {
         return;
       }
       SmartDialog.showLoading(msg: "");
-      var playUrl =
-          await LiveApiFactory.instance.getPlayUrls(site.id, detail, result);
+      var playUrl = await api.getPlayUrls(site.id, detail, result);
       SmartDialog.dismiss(status: SmartStatus.loading);
       await Get.dialog(SimpleDialog(
         title: const Text("选择线路"),

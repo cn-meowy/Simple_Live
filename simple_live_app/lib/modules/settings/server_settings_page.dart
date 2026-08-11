@@ -5,6 +5,8 @@ import 'package:remixicon/remixicon.dart';
 import 'package:simple_live_app/app/app_style.dart';
 import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_app/app/services/live_api_factory.dart';
+import 'package:simple_live_app/app/services/sites_service.dart';
+import 'package:simple_live_app/app/utils/server_url_util.dart';
 import 'package:simple_live_app/routes/route_path.dart';
 import 'package:simple_live_app/widgets/settings/settings_card.dart';
 import 'package:simple_live_app/widgets/settings/settings_switch.dart';
@@ -12,10 +14,9 @@ import 'package:simple_live_app/widgets/settings/settings_switch.dart';
 /// 服务端设置页面
 ///
 /// 包含：
-/// - 服务端地址输入框
-/// - 服务端启用开关（控制直播接口是否走服务端）
+/// - 服务端地址输入框（本机地址自动启动内嵌服务）
 /// - 测试连接
-/// - 数据自动同步开关（独立于服务端启用，只要地址可用即可同步）
+/// - 数据自动同步开关（只要地址可用即可同步）
 /// - 手动同步按钮
 class ServerSettingsPage extends StatefulWidget {
   const ServerSettingsPage({super.key});
@@ -26,6 +27,7 @@ class ServerSettingsPage extends StatefulWidget {
 
 class _ServerSettingsPageState extends State<ServerSettingsPage> {
   late TextEditingController _urlController;
+  late FocusNode _urlFocusNode;
 
   @override
   void initState() {
@@ -33,12 +35,41 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
     _urlController = TextEditingController(
       text: AppSettingsController.instance.serverUrl.value,
     );
+    // 失焦时统一持久化 + 重置 API 实例 + 重新拉取站点列表，刷新首页/分类/搜索 Tab。
+    // 不在 onChanged 中触发，避免每次按键都请求服务端。
+    _urlFocusNode = FocusNode();
+    _urlFocusNode.addListener(_onUrlFocusChanged);
   }
 
   @override
   void dispose() {
+    _urlFocusNode.removeListener(_onUrlFocusChanged);
+    _urlFocusNode.dispose();
     _urlController.dispose();
     super.dispose();
+  }
+
+  /// 输入框失焦时：地址变更则持久化、重置 API 实例并重新拉取站点列表
+  void _onUrlFocusChanged() {
+    if (_urlFocusNode.hasFocus) return;
+    final value = _normalizeUrl(_urlController.text);
+    if (value == AppSettingsController.instance.serverUrl.value) return;
+    _urlController.text = value;
+    AppSettingsController.instance.setServerUrl(value);
+    // 地址变更时重置 LiveApiFactory，下次访问会按需启停内嵌服务
+    LiveApiFactory.reset();
+    // 重新拉取站点列表，刷新首页/分类/搜索 Tab
+    SitesService.instance.fetchRemoteSites();
+  }
+
+  /// 规范化地址：修复 iOS 键盘吞冒号、补 scheme、去尾斜杠。
+  /// 非法协议时回退到 trim，不阻断输入。
+  String _normalizeUrl(String input) {
+    try {
+      return ServerUrlUtil.normalize(input);
+    } catch (_) {
+      return input.trim();
+    }
   }
 
   @override
@@ -67,16 +98,16 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: _urlController,
+                        focusNode: _urlFocusNode,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        keyboardType: TextInputType.url,
+                        textCapitalization: TextCapitalization.none,
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           hintText: "如: http://192.168.1.100:8089",
                           prefixIcon: Icon(Icons.link),
                         ),
-                        onChanged: (value) {
-                          AppSettingsController.instance.setServerUrl(value);
-                          // 地址变更时重置 LiveApiFactory
-                          LiveApiFactory.reset();
-                        },
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -93,28 +124,6 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
                     ],
                   ),
                 ),
-              ],
-            ),
-          ),
-
-          // 服务端启用开关
-          Padding(
-            padding: AppStyle.edgeInsetsA12.copyWith(top: 24),
-            child: Text("接口设置", style: Get.textTheme.titleSmall),
-          ),
-          SettingsCard(
-            child: Column(
-              children: [
-                Obx(() => SettingsSwitch(
-                      title: "启用服务端接口",
-                      subtitle: "开启后直播接口将通过服务端获取，否则使用本地直连",
-                      value: AppSettingsController.instance.serverEnable.value,
-                      onChanged: (value) {
-                        AppSettingsController.instance.setServerEnable(value);
-                        // 开关变更时重置 LiveApiFactory
-                        LiveApiFactory.reset();
-                      },
-                    )),
               ],
             ),
           ),
@@ -157,8 +166,9 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
             padding: AppStyle.edgeInsetsA12.copyWith(top: 24),
             child: Text(
               "说明：\n"
-              "• 服务端启用：控制直播接口（分类、推荐、搜索、播放等）是否走服务端\n"
-              "• 数据同步：独立于服务端启用开关，只要配置了服务端地址且可用即可同步\n"
+              "• 服务端地址为本机（127.0.0.1/localhost/本机IP）时，app 自动启动内嵌直播服务\n"
+              "• 服务端地址为局域网其他设备时，走远程服务端接口\n"
+              "• 数据同步：只要配置了服务端地址且可用即可同步\n"
               "• 弹幕始终由客户端直连各平台，不走服务端中转\n"
               "• Cookie 在客户端配置后自动上传到服务端",
               style: Get.textTheme.bodySmall?.copyWith(color: Colors.grey),
@@ -171,11 +181,12 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
 
   /// 测试连接
   Future<void> _testConnection() async {
-    final url = _urlController.text.trim();
+    final url = _normalizeUrl(_urlController.text);
     if (url.isEmpty) {
       SmartDialog.showToast("请输入服务端地址");
       return;
     }
+    _urlController.text = url;
 
     SmartDialog.showLoading(msg: "正在测试连接...");
     try {
@@ -183,6 +194,13 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
       SmartDialog.dismiss(status: SmartStatus.loading);
       if (available) {
         SmartDialog.showToast("连接成功");
+        // 测试成功：将地址持久化并刷新站点列表，使首页/分类/搜索 Tab 即时更新。
+        // 用户可能未离开输入框（未触发失焦），这里兜底保证地址生效。
+        if (url != AppSettingsController.instance.serverUrl.value) {
+          AppSettingsController.instance.setServerUrl(url);
+          LiveApiFactory.reset();
+        }
+        SitesService.instance.fetchRemoteSites();
       } else {
         SmartDialog.showToast("连接失败，请检查地址");
       }

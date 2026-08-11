@@ -14,13 +14,16 @@ import 'package:simple_live_tv_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_tv_app/app/log.dart';
 import 'package:simple_live_tv_app/app/utils.dart';
 import 'package:simple_live_tv_app/models/db/follow_user.dart';
+import 'package:simple_live_tv_app/models/db/follow_user_tag.dart';
 import 'package:simple_live_tv_app/models/db/history.dart';
 import 'package:simple_live_tv_app/routes/app_pages.dart';
 import 'package:simple_live_tv_app/routes/route_path.dart';
 import 'package:simple_live_tv_app/services/bilibili_account_service.dart';
 import 'package:simple_live_tv_app/services/db_service.dart';
+import 'package:simple_live_tv_app/services/douyin_account_service.dart';
 import 'package:simple_live_tv_app/services/follow_user_service.dart';
 import 'package:simple_live_tv_app/services/local_storage_service.dart';
+import 'package:simple_live_tv_app/services/server_sync_service.dart';
 import 'package:simple_live_tv_app/services/sync_service.dart';
 
 void main() async {
@@ -64,6 +67,7 @@ Future initServices() async {
 
   Hive.registerAdapter(FollowUserAdapter());
   Hive.registerAdapter(HistoryAdapter());
+  Hive.registerAdapter(FollowUserTagAdapter());
 
   //包信息
   Utils.packageInfo = await PackageInfo.fromPlatform();
@@ -75,6 +79,8 @@ Future initServices() async {
   Get.put(AppSettingsController());
 
   Get.put(BiliBiliAccountService());
+  Get.put(DouyinAccountService());
+  Get.put(ServerSyncService());
 
   Get.put(SyncService());
 

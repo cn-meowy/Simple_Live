@@ -38,12 +38,12 @@ class RemoteSyncWebDAVController extends BaseController {
   var lastRecoverTime = "--".obs;
   var lastUploadTime = "--".obs;
 
-  final _userFollowJsonName = 'SimpleLive_follows.json';
-  final _userHistoriesJsonName = 'SimpleLive_histories.json';
-  final _userBlockedWordJsonName = 'SimpleLive_blocked_word.json';
-  final _userBilibiliAccountJsonName = 'SimpleLive_bilibili_account.json';
-  final _userSettingsJsonName = 'SimpleLive_Settings.json';
-  final _userTagsJsonName = 'SimpleLive_Tags.json';
+  final _userFollowJsonName = 'MeowLive_follows.json';
+  final _userHistoriesJsonName = 'MeowLive_histories.json';
+  final _userBlockedWordJsonName = 'MeowLive_blocked_word.json';
+  final _userBilibiliAccountJsonName = 'MeowLive_bilibili_account.json';
+  final _userSettingsJsonName = 'MeowLive_Settings.json';
+  final _userTagsJsonName = 'MeowLive_Tags.json';
 
   @override
   void onInit() {

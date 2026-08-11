@@ -7,6 +7,8 @@ import 'package:simple_live_app/app/app_style.dart';
 import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_app/app/utils.dart';
 import 'package:simple_live_app/modules/settings/other/other_settings_controller.dart';
+import 'package:simple_live_app/routes/route_path.dart';
+import 'package:simple_live_app/widgets/settings/settings_action.dart';
 import 'package:simple_live_app/widgets/settings/settings_card.dart';
 import 'package:simple_live_app/widgets/settings/settings_menu.dart';
 import 'package:simple_live_app/widgets/settings/settings_switch.dart';
@@ -136,6 +138,48 @@ class OtherSettingsPage extends GetView<OtherSettingsController> {
                       AppSettingsController.instance.setVideoHardwareDecoder(e);
                     },
                   ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: AppStyle.edgeInsetsA12.copyWith(top: 24),
+            child: Text(
+              "协议与声明",
+              style: Get.textTheme.titleSmall,
+            ),
+          ),
+          SettingsCard(
+            child: Column(
+              children: [
+                SettingsAction(
+                  leading: const Icon(Remix.file_text_line),
+                  title: "用户协议",
+                  onTap: () {
+                    Get.toNamed(
+                      RoutePath.kSettingsAgreement,
+                      arguments: {
+                        "title": "用户协议",
+                        "assetPath":
+                            "assets/agreements/user_agreement.txt",
+                      },
+                    );
+                  },
+                ),
+                AppStyle.divider,
+                SettingsAction(
+                  leading: const Icon(Remix.shield_keyhole_line),
+                  title: "隐私协议",
+                  onTap: () {
+                    Get.toNamed(
+                      RoutePath.kSettingsAgreement,
+                      arguments: {
+                        "title": "隐私协议",
+                        "assetPath":
+                            "assets/agreements/privacy_policy.txt",
+                      },
+                    );
+                  },
                 ),
               ],
             ),

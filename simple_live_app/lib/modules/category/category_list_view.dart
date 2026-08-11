@@ -8,20 +8,19 @@ import 'package:simple_live_app/routes/app_navigation.dart';
 import 'package:simple_live_app/widgets/keep_alive_wrapper.dart';
 import 'package:simple_live_app/widgets/net_image.dart';
 import 'package:simple_live_app/widgets/shadow_card.dart';
-import 'package:simple_live_core/simple_live_core.dart';
+import 'package:simple_live_app/core/simple_live_core.dart';
 import 'package:sticky_headers/sticky_headers.dart';
 
 class CategoryListView extends StatelessWidget {
-  final String tag;
-  const CategoryListView(this.tag, {Key? key}) : super(key: key);
-  CategoryListController get controller =>
-      Get.find<CategoryListController>(tag: tag);
+  final CategoryListController controller;
+  const CategoryListView(this.controller, {Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     return KeepAliveWrapper(
       child: Obx(
         () => EasyRefresh(
-          firstRefresh: true,
+          firstRefresh: false,
           controller: controller.easyRefreshController,
           onRefresh: controller.refreshData,
           header: MaterialHeader(

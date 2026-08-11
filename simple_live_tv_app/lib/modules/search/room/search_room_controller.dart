@@ -2,6 +2,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get_rx/src/rx_types/rx_types.dart';
 import 'package:simple_live_tv_app/app/constant.dart';
 import 'package:simple_live_tv_app/app/controller/base_controller.dart';
+import 'package:simple_live_tv_app/app/services/live_api_factory.dart';
 import 'package:simple_live_tv_app/app/sites.dart';
 import 'package:simple_live_tv_app/modules/hot_live/hot_live_controller.dart';
 
@@ -33,7 +34,7 @@ class SearchRoomController extends BasePageController<LiveRoomItemExt> {
 
   @override
   Future<List<LiveRoomItemExt>> getData(int page, int pageSize) async {
-    var result = await site.liveSite.searchRooms(keyword, page: page);
+    var result = await LiveApiFactory.instance.searchRooms(site.id, keyword, page: page);
 
     return result.items
         .map((e) => LiveRoomItemExt(

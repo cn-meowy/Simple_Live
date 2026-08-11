@@ -11,7 +11,6 @@ import fastifyWebsocket from '@fastify/websocket';
 import fastifyStatic from '@fastify/static';
 import fastifyCors from '@fastify/cors';
 import * as fs from 'fs';
-import * as path from 'path';
 
 import { ServerConfig } from './config/server-config.js';
 import { CoreLog } from './core/index.js';
@@ -22,10 +21,11 @@ import { FfmpegStreamManager } from './service/ffmpeg-stream-manager.js';
 import { SyncDataManager } from './service/sync-data-manager.js';
 import { registerSiteRoutes } from './router/site-routes.js';
 import { registerRoomRoutes } from './router/room-routes.js';
-import { registerStreamRoutes } from './router/stream-routes.js';
+import { registerStreamRoutes, registerHlsRoute, registerCoverRoute, registerAvatarRoute } from './router/stream-routes.js';
 import { registerDanmakuRoutes } from './router/danmaku-routes.js';
 import { registerSyncRoutes } from './router/sync-routes.js';
 import { registerCookieRoutes } from './router/cookie-routes.js';
+import { registerAccountRoutes } from './router/account-routes.js';
 
 /**
  * Simple Live Server 主类
@@ -118,7 +118,10 @@ export class SimpleLiveServer {
 
     // 注册所有路由
     registerSiteRoutes(app, this.service);
-    registerRoomRoutes(app, this.service);
+    registerRoomRoutes(app, {
+      service: this.service,
+      streamManager: this.streamManager,
+    });
     registerStreamRoutes(app, {
       streamManager: this.streamManager,
       service: this.service,
@@ -127,80 +130,16 @@ export class SimpleLiveServer {
     registerDanmakuRoutes(app, this.danmakuManager);
     registerSyncRoutes(app, this.syncDataManager);
     registerCookieRoutes(app, this.syncDataManager);
+    registerAccountRoutes(app, this.service, this.syncDataManager);
 
     // 封面图片静态文件服务：/api/v1/stream/covers/:filename
-    app.get('/api/v1/stream/covers/:filename', async (req, reply) => {
-      const { filename } = req.params as { filename: string };
-      const coverPath = path.join(this.config.coverDir, filename);
+    registerCoverRoute(app, this.config.coverDir);
 
-      // 安全检查：防止路径遍历
-      const resolved = path.resolve(coverPath);
-      if (!resolved.startsWith(path.resolve(this.config.coverDir))) {
-        reply.code(403).send('Forbidden');
-        return;
-      }
-
-      try {
-        const stat = await fs.promises.stat(resolved);
-        if (stat.isFile()) {
-          reply.header('Content-Type', 'image/jpeg');
-          reply.header('Cache-Control', 'public, max-age=86400');
-          reply.header('Access-Control-Allow-Origin', '*');
-          const stream = fs.createReadStream(resolved);
-          reply.send(stream);
-        } else {
-          reply.code(404).send('Not Found');
-        }
-      } catch {
-        reply.code(404).send('Not Found');
-      }
-    });
+    // 头像图片静态文件服务：/api/v1/stream/avatars/:filename
+    registerAvatarRoute(app, this.config.avatarDir);
 
     // HLS 静态文件服务：/api/v1/stream/hls/<sessionId>/<path>
-    app.get('/api/v1/stream/hls/:sessionId/*', async (req, reply) => {
-      const params = req.params as { sessionId: string };
-      const sessionId = params.sessionId;
-      const streamPath = this.streamManager.getStreamPath(sessionId);
-
-      if (!streamPath) {
-        reply.code(404).send('Stream session not found');
-        return;
-      }
-
-      // 从 URL 中提取 sessionId 之后的相对路径
-      const url = req.url;
-      const prefix = `/api/v1/stream/hls/${sessionId}/`;
-      const relativePath = url.substring(url.indexOf(prefix) + prefix.length);
-
-      // 安全检查：防止路径遍历
-      const filePath = path.resolve(streamPath, relativePath);
-      if (!filePath.startsWith(path.resolve(streamPath))) {
-        reply.code(403).send('Forbidden');
-        return;
-      }
-
-      try {
-        const stat = await fs.promises.stat(filePath);
-        if (stat.isFile()) {
-          // 根据文件扩展名设置 Content-Type
-          const ext = path.extname(filePath).toLowerCase();
-          if (ext === '.m3u8') {
-            reply.header('Content-Type', 'application/vnd.apple.mpegurl');
-          } else if (ext === '.ts') {
-            reply.header('Content-Type', 'video/mp2t');
-          }
-          reply.header('Cache-Control', 'no-cache');
-          reply.header('Access-Control-Allow-Origin', '*');
-
-          const stream = fs.createReadStream(filePath);
-          reply.send(stream);
-        } else {
-          reply.code(404).send('Not Found');
-        }
-      } catch {
-        reply.code(404).send('Not Found');
-      }
-    });
+    registerHlsRoute(app, this.streamManager);
 
     // 健康检查
     app.get('/health', async (_req, reply) => {
@@ -235,9 +174,18 @@ export class SimpleLiveServer {
       // ignore
     }
 
+    // 确保头像图片目录存在（演示模式截帧用）
+    try {
+      await fs.promises.mkdir(this.config.avatarDir, { recursive: true });
+    } catch {
+      // ignore
+    }
+
     // 初始化同步数据（从 SQLite 加载到内存）
     try {
       this.syncDataManager.init();
+      // 注入到 LiveSiteService，使 QR 登录成功后能写入 cookie
+      this.service.setSyncDataManager(this.syncDataManager);
     } catch (err) {
       console.error('加载同步数据失败:', err);
     }
@@ -247,6 +195,18 @@ export class SimpleLiveServer {
       await this.service.loadLocalData();
     } catch (err) {
       console.error('加载本地视频数据失败:', err);
+    }
+
+    // 演示模式：预启动所有本地视频直播流，使点播即时播放。
+    // 必须在 loadLocalData（房间列表就绪）之后、HTTP 服务监听之前完成，
+    // 确保客户端首次请求即可命中已就绪的 HLS 会话。
+    if (this.config.demoMode) {
+      try {
+        console.log('演示模式：正在预启动本地视频直播流...');
+        await this.service.preWarmLocalStreams(this.streamManager);
+      } catch (err) {
+        console.error('预启动直播流失败（非致命）:', err);
+      }
     }
 
     this.app = await this.buildApp();

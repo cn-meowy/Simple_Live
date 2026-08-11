@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:simple_live_app/requests/custom_log_interceptor.dart';
 import 'package:simple_live_app/requests/http_error.dart';
+import 'package:simple_live_app/requests/redirect_interceptor.dart';
 
 class HttpClient {
   static HttpClient? _httpUtil;
@@ -17,9 +18,13 @@ class HttpClient {
         connectTimeout: const Duration(seconds: 20),
         receiveTimeout: const Duration(seconds: 20),
         sendTimeout: const Duration(seconds: 20),
+        // 关闭 dart:io 自动跟随，改由 RedirectInterceptor 手动处理，
+        // 解决 POST 等带请求体请求在 http→https 301/302 时无法重放请求体的问题。
+        followRedirects: false,
       ),
     );
     dio.interceptors.add(CustomLogInterceptor());
+    dio.interceptors.add(RedirectInterceptor(dio));
   }
 
   /// Get请求，返回String
