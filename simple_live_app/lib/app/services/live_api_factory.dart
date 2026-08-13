@@ -16,7 +16,10 @@ import 'package:simple_live_app/requests/http_client.dart';
 /// - 地址为本机（`127.0.0.1`/`localhost`/本机网卡 IP）→ 自动启动 [EmbeddedLiveServer]，
 ///   绑定到 `serverUrl` 中的本机 IP + 指定端口（URL 无端口时用默认端口），
 ///   用该 baseUrl 构造 [RemoteLiveApi]，供本机及同局域网设备访问。
-/// - 地址为非本机 → 用该地址构造 [RemoteLiveApi]，并关闭内嵌服务。
+/// - 地址为非本机 → 用该地址构造 [RemoteLiveApi]，并关闭内嵌服务，
+///   异步通过 [checkServerAvailable] 检测可用性，结果写入
+///   `AppSettingsController.embeddedServerStatus`（`remote:checking` →
+///   `remote:ok` / `remote:fail`）。检测不阻塞实例创建。
 /// - 地址为空 → 抛 [StateError]（懒启动，首访时报错而非启动期崩溃）。
 ///
 /// 启停/失败状态会写入 `AppSettingsController.embeddedServerStatus`，
@@ -129,10 +132,25 @@ class LiveApiFactory {
       }
     }
 
-    // 非本机：关闭内嵌服务，用远程地址
+    // 非本机：关闭内嵌服务，用远程地址（异步检测可用性，不阻塞实例创建）
     await EmbeddedLiveServer.instance.stop();
-    settings.embeddedServerStatus.value = 'disabled';
+    settings.embeddedServerStatus.value = 'remote:checking';
+    // 不 await 检测，避免阻塞实例创建和后续 API 调用；
+    // 检查 serverUrl 是否仍为被检测的 url，仅在未变更时更新状态，防止覆盖用户新地址的检测结果
+    _checkRemoteAvailable(serverUrl);
     return RemoteLiveApi(serverUrl);
+  }
+
+  /// 异步检测远端服务可用性，结果写入 `embeddedServerStatus`。
+  ///
+  /// 若用户在检测过程中切换了地址，则忽略本次结果以避免覆盖新地址的状态。
+  static Future<void> _checkRemoteAvailable(String url) async {
+    final settings = AppSettingsController.instance;
+    final available = await checkServerAvailable(url);
+    if (settings.serverUrl.value == url) {
+      settings.embeddedServerStatus.value =
+          available ? 'remote:ok' : 'remote:fail';
+    }
   }
 
   /// 重置实例

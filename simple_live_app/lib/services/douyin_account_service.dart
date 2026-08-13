@@ -55,7 +55,7 @@ class DouyinAccountService extends GetxService {
     final serverUrl = AppSettingsController.instance.serverUrl.value;
     if (serverUrl.isEmpty || cookie.isEmpty) return;
     try {
-      await HttpClient.instance.postJson(
+      await HttpClient.instance.putJson(
         '$serverUrl/api/v1/cookie/douyin',
         data: {'cookie': cookie},
       );

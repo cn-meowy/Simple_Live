@@ -36,7 +36,7 @@ class GenericCookieLoginController extends GetxController {
         SmartDialog.showToast("请先在设置中配置服务端地址");
         return;
       }
-      await HttpClient.instance.postJson(
+      await HttpClient.instance.putJson(
         '$serverUrl/api/v1/cookie/$siteId',
         data: {'cookie': value},
       );

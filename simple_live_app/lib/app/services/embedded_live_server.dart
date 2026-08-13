@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:image/image.dart' as img;
+import 'package:qr/qr.dart';
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
@@ -9,6 +11,8 @@ import 'package:simple_live_app/app/constant.dart';
 import 'package:simple_live_app/app/log.dart';
 import 'package:simple_live_app/app/sites.dart';
 import 'package:simple_live_app/core/simple_live_core.dart';
+import 'package:simple_live_app/requests/http_client.dart';
+import 'package:simple_live_app/services/local_storage_service.dart';
 
 /// app 内嵌 HTTP 直播服务
 ///
@@ -18,7 +22,9 @@ import 'package:simple_live_app/core/simple_live_core.dart';
 /// 绑定 `serverUrl` 中的本机 IP（127.0.0.1 或本机网卡 IPv4）+ 指定端口，
 /// 供本机 App 及同局域网其他设备访问。**不绑定 0.0.0.0**，避免暴露到
 /// 公网/不受信任网络。
-/// 同步/Cookie 接口在本机模式下实现为 no-op（本机无需同步，Cookie 已在本地）。
+///
+/// Cookie 接口使用内存缓存 + LocalStorageService 持久化；同步接口仍为 no-op。
+/// 账号接口（仅 bilibili）走 B 站 passport 真实接口生成/轮询二维码。
 
 /// 内嵌服务绑定失败异常（端口占用、地址不在本机网卡等）。
 class EmbeddedServerBindException implements Exception {
@@ -35,6 +41,12 @@ class EmbeddedLiveServer {
   String? baseUrl;
   String? _currentHost;
   int? _currentPort;
+
+  /// Cookie 内存缓存（siteId -> cookie 字符串）
+  ///
+  /// 启动时按需从 LocalStorageService 懒加载；写入时同步持久化。
+  /// GET 时如果内存未命中，先尝试从 LocalStorageService 加载。
+  final Map<String, String> _cookies = {};
 
   /// 当前服务是否正在运行
   bool get isRunning => _server != null && baseUrl != null;
@@ -101,10 +113,11 @@ class EmbeddedLiveServer {
     }
 
     server.autoCompress = true;
+    final actualPort = server.port;
     _server = server;
     _currentHost = host;
-    _currentPort = port;
-    baseUrl = 'http://$host:$port';
+    _currentPort = actualPort;
+    baseUrl = 'http://$host:$actualPort';
     Log.d('EmbeddedLiveServer serving at $baseUrl');
     return baseUrl!;
   }
@@ -173,8 +186,11 @@ class EmbeddedLiveServer {
     // 同步接口（本机模式 no-op）
     _registerSyncNoOp(router);
 
-    // Cookie 接口（本机模式 no-op）
-    _registerCookieNoOp(router);
+    // 账号接口（QR 登录等，仅 bilibili）
+    _registerAccountRoutes(router);
+
+    // Cookie 接口（内存 + LocalStorageService 持久化）
+    _registerCookieRoutes(router);
 
     return router;
   }
@@ -198,7 +214,12 @@ class EmbeddedLiveServer {
     try {
       final sites = Sites.allSites.values
           .where((s) => s.id != Constant.kLocal) // 本地服务不暴露"本地"虚拟平台
-          .map((s) => {'id': s.id, 'name': s.name})
+          .map((s) {
+            final entry = <String, dynamic>{'id': s.id, 'name': s.name};
+            final account = _getAccountDescriptor(s.id);
+            if (account != null) entry['account'] = account;
+            return entry;
+          })
           .toList();
       return _ok(sites);
     } catch (e) {
@@ -369,15 +390,241 @@ class EmbeddedLiveServer {
     router.post('/api/v1/sync/settings', (_) => _ok(<String, dynamic>{}));
   }
 
-  void _registerCookieNoOp(Router router) {
-    router.get('/api/v1/cookie/<siteId>',
-        (req) => _ok({'cookie': ''}));
-    router.put('/api/v1/cookie/<siteId>', (req) async {
+  // ============ 账号描述符 ============
+
+  /// 返回站点的账号描述符（与 Node.js `_getAccountDescriptor` 对齐）。
+  ///
+  /// - bilibili -> qr 扫码登录
+  /// - douyin -> cookie 手动输入
+  /// - 其余 -> null（账号管理页不显示）
+  Map<String, dynamic>? _getAccountDescriptor(String siteId) {
+    switch (siteId) {
+      case 'bilibili':
+        return {
+          'type': 'qr',
+          'label': '扫码登录',
+          'hint': '使用哔哩哔哩 App 扫码登录',
+        };
+      case 'douyin':
+        return {
+          'type': 'cookie',
+          'label': '配置 ttwid',
+          'hint': '自定义 ttwid 可提升画质',
+        };
+      default:
+        return null;
+    }
+  }
+
+  // ============ 账号 / QR 路由 ============
+
+  void _registerAccountRoutes(Router router) {
+    // POST /api/v1/sites/<siteId>/account/qr/generate
+    router.post('/api/v1/sites/<siteId>/account/qr/generate',
+        _qrGenerateHandler);
+
+    // GET /api/v1/sites/<siteId>/account/qr/poll
+    router.get('/api/v1/sites/<siteId>/account/qr/poll',
+        _qrPollHandler);
+  }
+
+  Future<shelf.Response> _qrGenerateHandler(shelf.Request request) async {
+    try {
+      final siteId = request.params['siteId']!;
+      if (siteId != 'bilibili') {
+        return _notFound('平台 $siteId 不支持扫码登录');
+      }
+      // 调用 B 站 passport 接口获取 qrcode_key 和 url
+      final result = await HttpClient.instance.getJson(
+        'https://passport.bilibili.com/x/passport-login/web/qrcode/generate',
+      );
+      if (result is! Map ||
+          result['code'] != 0 ||
+          result['data'] is! Map) {
+        return _error(StateError(
+            'B站二维码生成失败: ${result is Map ? result['message'] : "未知错误"}'));
+      }
+      final data = result['data'] as Map;
+      final qrcodeKey = data['qrcode_key'] as String;
+      final url = data['url'] as String;
+      final qrImageBase64 = _generateQrPngBase64(url);
+      return _ok({'qrcodeKey': qrcodeKey, 'qrImageBase64': qrImageBase64});
+    } catch (e) {
+      return _error(e);
+    }
+  }
+
+  Future<shelf.Response> _qrPollHandler(shelf.Request request) async {
+    try {
+      final siteId = request.params['siteId']!;
+      if (siteId != 'bilibili') {
+        return _notFound('平台 $siteId 不支持扫码登录');
+      }
+      final qrcodeKey =
+          request.requestedUri.queryParameters['qrcodeKey'] ?? '';
+      if (qrcodeKey.isEmpty) {
+        return _badRequest('缺少 qrcodeKey 参数');
+      }
+
+      // 使用 HttpClient.instance.get() 以访问完整的 set-cookie 响应头
+      final response = await HttpClient.instance.get(
+        'https://passport.bilibili.com/x/passport-login/web/qrcode/poll',
+        queryParameters: {'qrcode_key': qrcodeKey},
+      );
+      final body = response.data;
+      if (body is! Map || body['code'] != 0 || body['data'] is! Map) {
+        return _error(StateError(
+            'B站轮询失败: ${body is Map ? body['message'] : "未知错误"}'));
+      }
+      final data = body['data'] as Map;
+      final code = (data['code'] as num).toInt();
+
+      if (code == 0) {
+        // 登录成功：从 set-cookie 头提取 cookie
+        final setCookieHeaders =
+            response.headers['set-cookie'] as List?;
+        final cookies = <String>[];
+        if (setCookieHeaders != null) {
+          for (final item in setCookieHeaders) {
+            if (item is String) {
+              final cookiePart = item.split(';').first;
+              if (cookiePart.isNotEmpty) cookies.add(cookiePart);
+            }
+          }
+        }
+        final cookieStr = cookies.join(';');
+        _setCookie('bilibili', cookieStr);
+        return _ok({
+          'status': 'confirmed',
+          'cookie': cookieStr,
+        });
+      }
+      if (code == 86038) return _ok({'status': 'expired'});
+      if (code == 86090) return _ok({'status': 'scanned'});
+      return _ok({'status': 'unscanned'});
+    } catch (e) {
+      return _error(e);
+    }
+  }
+
+  /// 使用 `qr` 包生成 QR 矩阵，再用 `image` 包渲染为白底黑点的 PNG，
+  /// base64 编码后加上 `data:image/png;base64,` 前缀。
+  ///
+  /// 参数对齐 Node.js 的 `QRCode.toDataURL(url, {margin:1, width:300})`：
+  /// 1 module margin，缩放后图像宽度约 300px。
+  String _generateQrPngBase64(String data) {
+    final qrCode = QrCode.fromData(
+      data: data,
+      errorCorrectLevel: QrErrorCorrectLevel.M,
+    );
+    final qrImage = QrImage(qrCode);
+    final moduleCount = qrImage.moduleCount;
+
+    // 估算 scale 使总像素约 300，模块数小时至少 8px/module；最大 12。
+    const targetSize = 300;
+    final rawScale = (targetSize / (moduleCount + 2)).floor();
+    final scale = rawScale < 8 ? 8 : (rawScale > 12 ? 12 : rawScale);
+    const margin = 1; // 1 module margin
+    final pixelSize = (moduleCount + margin * 2) * scale;
+    final image = img.Image(width: pixelSize, height: pixelSize);
+
+    // 白底
+    img.fill(image, color: img.ColorRgb8(255, 255, 255));
+
+    // 黑点
+    final black = img.ColorRgb8(0, 0, 0);
+    for (var y = 0; y < moduleCount; y++) {
+      for (var x = 0; x < moduleCount; x++) {
+        if (qrImage.isDark(y, x)) {
+          final px0 = (x + margin) * scale;
+          final py0 = (y + margin) * scale;
+          img.fillRect(
+            image,
+            x1: px0,
+            y1: py0,
+            x2: px0 + scale - 1,
+            y2: py0 + scale - 1,
+            color: black,
+          );
+        }
+      }
+    }
+
+    final pngBytes = img.encodePng(image);
+    return 'data:image/png;base64,${base64Encode(pngBytes)}';
+  }
+
+  // ============ Cookie 路由 ============
+
+  void _registerCookieRoutes(Router router) {
+    // GET /api/v1/cookie/<siteId>
+    router.get('/api/v1/cookie/<siteId>', (shelf.Request req) {
       final siteId = req.params['siteId']!;
-      return _ok({'siteId': siteId, 'cookie': ''});
+      return _ok({'cookie': _getCookie(siteId)});
     });
-    router.delete('/api/v1/cookie/<siteId>',
-        (req) => _ok({'siteId': req.params['siteId'], 'deleted': true}));
+
+    // PUT /api/v1/cookie/<siteId>
+    router.put('/api/v1/cookie/<siteId>', (shelf.Request req) async {
+      try {
+        final siteId = req.params['siteId']!;
+        final body = await req.readAsString();
+        if (body.isEmpty) return _badRequest('请求体不能为空');
+        final dynamic decoded = json.decode(body);
+        if (decoded is! Map) return _badRequest('请求体需为 JSON 对象');
+        final cookie = decoded['cookie'];
+        if (cookie is! String) return _badRequest('cookie 字段必须为字符串');
+        _setCookie(siteId, cookie);
+        return _ok({'siteId': siteId, 'cookie': cookie});
+      } catch (e) {
+        return _error(e);
+      }
+    });
+
+    // DELETE /api/v1/cookie/<siteId>
+    router.delete('/api/v1/cookie/<siteId>', (shelf.Request req) {
+      final siteId = req.params['siteId']!;
+      _deleteCookie(siteId);
+      return _ok({'siteId': siteId, 'deleted': true});
+    });
+  }
+
+  /// 读取 cookie：优先内存，未命中则尝试从 LocalStorageService 加载。
+  String _getCookie(String siteId) {
+    final cached = _cookies[siteId];
+    if (cached != null) return cached;
+    try {
+      final stored = LocalStorageService.instance
+          .getValue<String>('embedded_cookie_$siteId', '');
+      if (stored.isNotEmpty) {
+        _cookies[siteId] = stored;
+        return stored;
+      }
+    } catch (_) {
+      // 测试环境 GetX 未初始化时静默忽略，返回空字符串
+    }
+    return '';
+  }
+
+  /// 写入 cookie：写入内存并尝试持久化。
+  void _setCookie(String siteId, String cookie) {
+    _cookies[siteId] = cookie;
+    try {
+      LocalStorageService.instance
+          .setValue('embedded_cookie_$siteId', cookie);
+    } catch (_) {
+      // 测试环境静默忽略持久化失败
+    }
+  }
+
+  /// 删除 cookie：从内存移除并尝试持久化空值。
+  void _deleteCookie(String siteId) {
+    _cookies.remove(siteId);
+    try {
+      LocalStorageService.instance
+          .setValue('embedded_cookie_$siteId', '');
+    } catch (_) {
+      // 测试环境静默忽略持久化失败
+    }
   }
 
   // ============ 辅助方法 ============
@@ -409,6 +656,14 @@ class EmbeddedLiveServer {
     return shelf.Response(
       400,
       body: json.encode({'code': 400, 'data': null, 'msg': msg}),
+      headers: {'Content-Type': 'application/json'},
+    );
+  }
+
+  shelf.Response _notFound(String msg) {
+    return shelf.Response(
+      404,
+      body: json.encode({'code': 404, 'data': null, 'msg': msg}),
       headers: {'Content-Type': 'application/json'},
     );
   }

@@ -30,6 +30,8 @@ dependencies:
   logger: ^2.6.2 #日志
   intl: ^0.20.2 #国际化
   qr_flutter: ^4.1.0 #二维码生成
+  qr: ^3.0.2 #二维码编码（嵌入式服务生成 PNG base64 数据 URL）
+  image: ^4.8.0 #PNG 渲染（嵌入式服务生成二维码图片）
   dynamic_color: 1.8.1 #动态颜色（锁定：1.9.0 的 Android Kotlin DSL 迁移在 Flutter 插件构建脚本中 unresolved，详见 .kilo/plans/1786421245715-dynamic-color-gradle-dsl-fix.md）
   path: any
   collection: any

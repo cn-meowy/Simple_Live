@@ -579,9 +579,12 @@ class AppSettingsController extends GetxController {
   }
 
   /// 内嵌服务状态（由 LiveApiFactory 写入）：
-  /// - `"disabled"` —— serverUrl 为空或非本机
-  /// - `"running"` —— 内嵌服务已启动
-  /// - `"error: ..."` —— 启动失败原因
+  /// - `"disabled"` —— 未配置 serverUrl
+  /// - `"running"` —— 本机地址，内嵌服务已启动
+  /// - `"remote:checking"` —— 远端地址，正在异步检测可用性
+  /// - `"remote:ok"` —— 远端服务可用
+  /// - `"remote:fail"` —— 远端服务不可用（地址不可达）
+  /// - `"error: ..."` —— 本机内嵌服务启动失败原因
   var embeddedServerStatus = "disabled".obs;
 
   /// 是否启用数据自动同步

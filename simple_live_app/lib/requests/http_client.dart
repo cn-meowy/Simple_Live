@@ -166,6 +166,46 @@ class HttpClient {
     }
   }
 
+  /// Put请求，返回Map
+  /// * [url] 请求链接
+  /// * [queryParameters] 请求参数
+  /// * [data] 内容
+  /// * [cancel] 任务取消Token
+  Future<dynamic> putJson(
+    String url, {
+    Map<String, dynamic>? queryParameters,
+    dynamic data,
+    Map<String, dynamic>? header,
+    bool formUrlEncoded = false,
+    CancelToken? cancel,
+  }) async {
+    try {
+      queryParameters ??= {};
+      header ??= {};
+      data ??= {};
+      var result = await dio.put(
+        url,
+        queryParameters: queryParameters,
+        data: data,
+        options: Options(
+          responseType: ResponseType.json,
+          headers: header,
+          contentType:
+              formUrlEncoded ? Headers.formUrlEncodedContentType : null,
+        ),
+        cancelToken: cancel,
+      );
+      return result.data;
+    } catch (e) {
+      if (e is DioException && e.type == DioExceptionType.badResponse) {
+        throw HttpError(e.message ?? "",
+            statusCode: e.response?.statusCode ?? 0);
+      } else {
+        throw HttpError("发送PUT请求失败");
+      }
+    }
+  }
+
   /// Head请求，返回Response
   /// * [url] 请求链接
   /// * [queryParameters] 请求参数

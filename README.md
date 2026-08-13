@@ -59,7 +59,7 @@ Meow Live 基于 [xiaoyaocz/dart_simple_live](https://github.com/xiaoyaocz/dart_
 相比原版的「直连各平台」模式，本分支已移除直连——服务端地址为必填项（`live_api_factory.dart`：地址为空时抛 `StateError`）。由配置的服务端地址决定**两种工作方式**：
 
 1. **自建服务端模式**：配置远程服务端地址，客户端连接 `simple_live_server_nodejs` 或其他兼容后端。首页平台列表、分类、搜索、同步、Cookie 管理均经服务端接口。
-2. **内嵌服务模式**：配置本机地址（`127.0.0.1` / `localhost` / 本机网卡 IP + Port），客户端自动启动 `EmbeddedLiveServer`（Shelf 实现，API 契约与 Node.js 服务端一致），指定为本机局域网IP + Port时开放来自局域网外部连接，其余方式绑定随机端口仅本机访问。
+2. **内嵌服务模式**：配置本机地址（`127.0.0.1` / `localhost` / 本机网卡 IP + Port），客户端自动启动 `EmbeddedLiveServer`（Shelf 实现，API 契约与 Node.js 服务端一致），指定为本机局域网IP + Port时开放来自局域网的外部连接，其余方式绑定随机端口仅本机访问。
 
 > **首页平台列表后端驱动**：`sites.dart` 的 `supportSites` 返回后端 `/api/v1/sites` 拉取的站点列表，无本地回退。内置站点注册表仅用于弹幕、账号登录、解析等 SDK 内部用途，不再参与首页 Tab 展示。
 
