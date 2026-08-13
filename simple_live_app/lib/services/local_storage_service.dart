@@ -171,6 +171,9 @@ class LocalStorageService extends GetxService {
   /// 服务端地址
   static const String kServerUrl = "ServerUrl";
 
+  /// 服务端默认端口（serverUrl 未指定端口时使用）
+  static const String kServerPort = "ServerPort";
+
   /// 是否启用数据自动同步
   static const String kServerSyncEnable = "ServerSyncEnable";
 

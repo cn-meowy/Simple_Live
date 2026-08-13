@@ -158,6 +158,8 @@ class AppSettingsController extends GetxController {
     // 服务端相关配置
     serverUrl.value = LocalStorageService.instance
         .getValue(LocalStorageService.kServerUrl, "");
+    serverPort.value = LocalStorageService.instance
+        .getValue(LocalStorageService.kServerPort, 8089);
     serverSyncEnable.value = LocalStorageService.instance
         .getValue(LocalStorageService.kServerSyncEnable, false);
     serverLastSyncTime.value = LocalStorageService.instance
@@ -567,6 +569,20 @@ class AppSettingsController extends GetxController {
     LocalStorageService.instance
         .setValue(LocalStorageService.kServerUrl, normalized);
   }
+
+  /// 服务端默认端口（serverUrl 未指定端口时使用）
+  var serverPort = 8089.obs;
+  void setServerPort(int e) {
+    serverPort.value = e;
+    LocalStorageService.instance
+        .setValue(LocalStorageService.kServerPort, e);
+  }
+
+  /// 内嵌服务状态（由 LiveApiFactory 写入）：
+  /// - `"disabled"` —— serverUrl 为空或非本机
+  /// - `"running"` —— 内嵌服务已启动
+  /// - `"error: ..."` —— 启动失败原因
+  var embeddedServerStatus = "disabled".obs;
 
   /// 是否启用数据自动同步
   var serverSyncEnable = false.obs;

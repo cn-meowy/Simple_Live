@@ -15,24 +15,46 @@ import 'package:simple_live_app/core/simple_live_core.dart';
 /// 用 shelf 实现，API 契约与 Node.js 服务端（`simple_live_server_nodejs`）
 /// 完全一致，复用 `RemoteLiveApi` 已有的 `/api/v1/sites/...` 格式。
 ///
-/// 绑定 `127.0.0.1` + 随机端口，仅本机 app 访问。
+/// 绑定 `serverUrl` 中的本机 IP（127.0.0.1 或本机网卡 IPv4）+ 指定端口，
+/// 供本机 App 及同局域网其他设备访问。**不绑定 0.0.0.0**，避免暴露到
+/// 公网/不受信任网络。
 /// 同步/Cookie 接口在本机模式下实现为 no-op（本机无需同步，Cookie 已在本地）。
+
+/// 内嵌服务绑定失败异常（端口占用、地址不在本机网卡等）。
+class EmbeddedServerBindException implements Exception {
+  final String message;
+  EmbeddedServerBindException(this.message);
+  @override
+  String toString() => 'EmbeddedServerBindException: $message';
+}
 class EmbeddedLiveServer {
   EmbeddedLiveServer._();
   static final EmbeddedLiveServer instance = EmbeddedLiveServer._();
 
   HttpServer? _server;
   String? baseUrl;
+  String? _currentHost;
+  int? _currentPort;
 
   /// 当前服务是否正在运行
   bool get isRunning => _server != null && baseUrl != null;
 
-  /// 启动内嵌服务，返回 baseUrl（`http://127.0.0.1:{port}`）。
+  /// 启动内嵌服务，绑定到 [host]（字符串形式的 IPv4）+ [port]。
   ///
-  /// 已运行则直接返回当前 baseUrl（幂等）。
-  Future<String> start() async {
-    if (isRunning) {
+  /// [host] 必须是 127.0.0.1、本机 LAN IP，或 LocalIpUtil.getLocalIpList()
+  /// 中的某个地址。调用方负责把 URL 里的 host 解析好（含 0.0.0.0 特殊处理）。
+  /// [port] 必须 > 0；调用方负责把 URL 里的端口或默认端口解析好。
+  ///
+  /// 已运行且 (host, port) 与当前一致则直接返回 baseUrl（幂等）；
+  /// 已运行但 (host, port) 不同则先 stop 再按新参数 start。
+  ///
+  /// 绑定失败（端口占用、地址不在本机网卡等）抛 [EmbeddedServerBindException]。
+  Future<String> start({required String host, required int port}) async {
+    if (isRunning && _currentHost == host && _currentPort == port) {
       return baseUrl!;
+    }
+    if (isRunning) {
+      await stop();
     }
 
     final router = _buildRouter();
@@ -46,14 +68,43 @@ class EmbeddedLiveServer {
         }))
         .addHandler(router.call);
 
-    final server = await shelf_io.serve(
-      handler,
-      InternetAddress.loopbackIPv4,
-      0,
-    );
+    InternetAddress bindAddr;
+    try {
+      // loopback / localhost 直接用常量，避免 DNS 查询开销与失败
+      if (host == '127.0.0.1' || host == 'localhost') {
+        bindAddr = InternetAddress.loopbackIPv4;
+      } else {
+        final addrs = await InternetAddress.lookup(host,
+            type: InternetAddressType.IPv4);
+        if (addrs.isEmpty) {
+          throw EmbeddedServerBindException('无法解析地址: $host');
+        }
+        bindAddr = addrs.firstWhere(
+          (a) => a.type == InternetAddressType.IPv4,
+          orElse: () => addrs.first,
+        );
+      }
+    } on EmbeddedServerBindException {
+      rethrow;
+    } on SocketException catch (e) {
+      throw EmbeddedServerBindException('地址解析失败: $host (${e.message})');
+    } on ArgumentError catch (e) {
+      throw EmbeddedServerBindException('无效地址: $host (${e.message})');
+    }
+
+    HttpServer server;
+    try {
+      server = await shelf_io.serve(handler, bindAddr, port);
+    } on SocketException catch (e) {
+      throw EmbeddedServerBindException(
+          '绑定 $host:$port 失败（端口可能被占用或地址不在本机网卡）: ${e.message}');
+    }
+
     server.autoCompress = true;
     _server = server;
-    baseUrl = 'http://127.0.0.1:${server.port}';
+    _currentHost = host;
+    _currentPort = port;
+    baseUrl = 'http://$host:$port';
     Log.d('EmbeddedLiveServer serving at $baseUrl');
     return baseUrl!;
   }
@@ -63,6 +114,8 @@ class EmbeddedLiveServer {
     final server = _server;
     _server = null;
     baseUrl = null;
+    _currentHost = null;
+    _currentPort = null;
     if (server != null) {
       await server.close(force: true);
       Log.d('EmbeddedLiveServer stopped');

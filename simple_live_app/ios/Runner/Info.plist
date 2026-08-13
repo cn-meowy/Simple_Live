@@ -64,6 +64,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>用于扫描二维码</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>用于在局域网内启用本地直播服务，允许同网段设备访问本机 API。</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

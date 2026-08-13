@@ -109,6 +109,30 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
                           prefixIcon: Icon(Icons.link),
                         ),
                       ),
+                      Obx(() {
+                        final status = AppSettingsController
+                            .instance.embeddedServerStatus.value;
+                        final text = switch (status) {
+                          'running' => '本地服务已启动（仅本机或同局域网可访问）',
+                          'disabled' => '未启动（将使用远端服务）',
+                          _ => status.startsWith('error:')
+                              ? '启动失败：${status.substring(6)}'
+                              : status,
+                        };
+                        final color = status == 'running'
+                            ? Colors.green
+                            : (status.startsWith('error:')
+                                ? Colors.red
+                                : Colors.grey);
+                        return Padding(
+                          padding: const EdgeInsets.only(
+                              top: 8, left: 4, right: 4),
+                          child: Text(
+                            text,
+                            style: TextStyle(color: color, fontSize: 12),
+                          ),
+                        );
+                      }),
                       const SizedBox(height: 12),
                       Row(
                         children: [
@@ -167,6 +191,8 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
             child: Text(
               "说明：\n"
               "• 服务端地址为本机（127.0.0.1/localhost/本机IP）时，app 自动启动内嵌直播服务\n"
+              "• 将地址设为本机局域网 IP（如 http://192.168.1.50:8089）可让同局域网其他设备访问本地服务\n"
+              "• 地址需包含 http:// 前缀，否则会被默认补为 https:// 导致无法连接\n"
               "• 服务端地址为局域网其他设备时，走远程服务端接口\n"
               "• 数据同步：只要配置了服务端地址且可用即可同步\n"
               "• 弹幕始终由客户端直连各平台，不走服务端中转\n"

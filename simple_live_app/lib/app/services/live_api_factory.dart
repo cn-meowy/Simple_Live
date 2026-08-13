@@ -14,10 +14,13 @@ import 'package:simple_live_app/requests/http_client.dart';
 ///
 /// 根据 `serverUrl` 配置返回 [RemoteLiveApi] 实例：
 /// - 地址为本机（`127.0.0.1`/`localhost`/本机网卡 IP）→ 自动启动 [EmbeddedLiveServer]，
-///   用其随机端口 baseUrl 构造 [RemoteLiveApi]。
+///   绑定到 `serverUrl` 中的本机 IP + 指定端口（URL 无端口时用默认端口），
+///   用该 baseUrl 构造 [RemoteLiveApi]，供本机及同局域网设备访问。
 /// - 地址为非本机 → 用该地址构造 [RemoteLiveApi]，并关闭内嵌服务。
 /// - 地址为空 → 抛 [StateError]（懒启动，首访时报错而非启动期崩溃）。
 ///
+/// 启停/失败状态会写入 `AppSettingsController.embeddedServerStatus`，
+/// 供设置页展示。
 /// 配置变更时需调用 [reset]，下次访问 [instance] 会重新判定并按需启停内嵌服务。
 class LiveApiFactory {
   static LiveApiService? _instance;
@@ -90,19 +93,45 @@ class LiveApiFactory {
     final serverUrl = settings.serverUrl.value;
 
     if (serverUrl.isEmpty) {
+      settings.embeddedServerStatus.value = 'disabled';
       throw StateError('未配置服务端地址');
     }
 
     final isLocal = await LocalIpUtil.isLocalHost(serverUrl);
 
     if (isLocal) {
-      // 本机：启动内嵌服务，用回环地址 + 随机端口作为 baseUrl
-      final baseUrl = await EmbeddedLiveServer.instance.start();
-      return RemoteLiveApi(baseUrl);
+      // 解析 host 与 port
+      final uri = Uri.parse(serverUrl);
+      var host = uri.host;
+      // host 含 ';' 多 IP 时取第一段（与 isLocalHost 对多 IP 的处理一致）
+      if (host.contains(';')) host = host.split(';').first.trim();
+      // 0.0.0.0 特殊处理：取本机第一个非 loopback 网卡 IP
+      if (host == '0.0.0.0') {
+        final ips = await LocalIpUtil.getLocalIpList();
+        if (ips.isEmpty) {
+          settings.embeddedServerStatus.value = 'error: 未找到可用局域网 IP';
+          throw StateError('未找到可用局域网 IP');
+        }
+        host = ips.first;
+      }
+      final port = uri.hasPort && uri.port > 0
+          ? uri.port
+          : settings.serverPort.value;
+
+      try {
+        final baseUrl = await EmbeddedLiveServer.instance
+            .start(host: host, port: port);
+        settings.embeddedServerStatus.value = 'running';
+        return RemoteLiveApi(baseUrl);
+      } catch (e) {
+        settings.embeddedServerStatus.value = 'error: $e';
+        rethrow;
+      }
     }
 
     // 非本机：关闭内嵌服务，用远程地址
     await EmbeddedLiveServer.instance.stop();
+    settings.embeddedServerStatus.value = 'disabled';
     return RemoteLiveApi(serverUrl);
   }
 
