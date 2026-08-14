@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:simple_live_app/app/app_style.dart';
-import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_app/app/log.dart';
+import 'package:simple_live_app/app/services/live_api_factory.dart';
 import 'package:simple_live_app/requests/http_client.dart';
 
 /// 通用 Cookie 输入控制器
@@ -29,13 +29,13 @@ class GenericCookieLoginController extends GetxController {
       SmartDialog.showToast("Cookie 不能为空");
       return;
     }
+    final serverUrl = await LiveApiFactory.resolveBaseUrl();
+    if (serverUrl.isEmpty) {
+      SmartDialog.showToast("请先在设置中配置服务端地址");
+      return;
+    }
     saving.value = true;
     try {
-      final serverUrl = AppSettingsController.instance.serverUrl.value;
-      if (serverUrl.isEmpty) {
-        SmartDialog.showToast("请先在设置中配置服务端地址");
-        return;
-      }
       await HttpClient.instance.putJson(
         '$serverUrl/api/v1/cookie/$siteId',
         data: {'cookie': value},

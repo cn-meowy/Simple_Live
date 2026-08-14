@@ -1,7 +1,7 @@
 import 'package:get/get.dart';
 import 'package:simple_live_app/app/constant.dart';
-import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_app/app/log.dart';
+import 'package:simple_live_app/app/services/live_api_factory.dart';
 import 'package:simple_live_app/app/sites.dart';
 import 'package:simple_live_app/requests/http_client.dart';
 import 'package:simple_live_app/services/local_storage_service.dart';
@@ -52,8 +52,9 @@ class DouyinAccountService extends GetxService {
 
   /// 上传 Cookie 到服务端
   Future<void> _uploadCookieToServer(String cookie) async {
-    final serverUrl = AppSettingsController.instance.serverUrl.value;
-    if (serverUrl.isEmpty || cookie.isEmpty) return;
+    if (cookie.isEmpty) return;
+    final serverUrl = await LiveApiFactory.resolveBaseUrl();
+    if (serverUrl.isEmpty) return;
     try {
       await HttpClient.instance.putJson(
         '$serverUrl/api/v1/cookie/douyin',
@@ -67,7 +68,7 @@ class DouyinAccountService extends GetxService {
 
   /// 删除服务端的 Cookie
   Future<void> _deleteCookieFromServer() async {
-    final serverUrl = AppSettingsController.instance.serverUrl.value;
+    final serverUrl = await LiveApiFactory.resolveBaseUrl();
     if (serverUrl.isEmpty) return;
     try {
       final dio = HttpClient.instance.dio;
@@ -83,7 +84,7 @@ class DouyinAccountService extends GetxService {
   /// 仅在本地没有 Cookie 时从服务端拉取
   Future<void> _syncCookieFromServer() async {
     if (cookie.isNotEmpty) return; // 本地已有 Cookie，不需要拉取
-    final serverUrl = AppSettingsController.instance.serverUrl.value;
+    final serverUrl = await LiveApiFactory.resolveBaseUrl();
     if (serverUrl.isEmpty) return;
     try {
       final result = await HttpClient.instance.getJson(

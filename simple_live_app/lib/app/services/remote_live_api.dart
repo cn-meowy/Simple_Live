@@ -70,8 +70,8 @@ class RemoteLiveApi implements LiveApiService {
 
   /// 写入指定站点的用户名
   Future<void> setSiteUsername(String siteId, String username) async {
-    await _postJson(
-      '/api/v1/sites/$siteId/account/username',
+    await HttpClient.instance.putJson(
+      '$baseUrl/api/v1/sites/$siteId/account/username',
       data: {'username': username},
     );
   }

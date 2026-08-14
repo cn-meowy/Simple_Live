@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
-import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_app/app/log.dart';
+import 'package:simple_live_app/app/services/live_api_factory.dart';
 import 'package:simple_live_app/requests/http_client.dart';
 
 enum GenericQRStatus {
@@ -37,8 +37,6 @@ class GenericQRLoginController extends GetxController {
   /// 轮询间隔
   static const Duration _pollInterval = Duration(seconds: 3);
 
-  String get _serverUrl => AppSettingsController.instance.serverUrl.value;
-
   @override
   void onInit() {
     super.onInit();
@@ -52,10 +50,16 @@ class GenericQRLoginController extends GetxController {
   }
 
   Future<void> loadQRCode() async {
+    final serverUrl = await LiveApiFactory.resolveBaseUrl();
+    if (serverUrl.isEmpty) {
+      SmartDialog.showToast("请先在设置中配置服务端地址");
+      qrStatus.value = GenericQRStatus.failed;
+      return;
+    }
     try {
       qrStatus.value = GenericQRStatus.loading;
       final result = await HttpClient.instance.postJson(
-        '$_serverUrl/api/v1/sites/$siteId/account/qr/generate',
+        '$serverUrl/api/v1/sites/$siteId/account/qr/generate',
       );
       final data = result['data'] as Map<String, dynamic>;
       _qrcodeKey = data['qrcodeKey'] as String;
@@ -76,9 +80,11 @@ class GenericQRLoginController extends GetxController {
 
   Future<void> pollQRStatus() async {
     if (_qrcodeKey.isEmpty) return;
+    final serverUrl = await LiveApiFactory.resolveBaseUrl();
+    if (serverUrl.isEmpty) return;
     try {
       final result = await HttpClient.instance.getJson(
-        '$_serverUrl/api/v1/sites/$siteId/account/qr/poll?qrcodeKey=$_qrcodeKey',
+        '$serverUrl/api/v1/sites/$siteId/account/qr/poll?qrcodeKey=$_qrcodeKey',
       );
       final status = result['data']['status'] as String;
       switch (status) {

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:simple_live_app/app/app_style.dart';
-import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_app/app/log.dart';
+import 'package:simple_live_app/app/services/live_api_factory.dart';
 import 'package:simple_live_app/models/account/site_account_descriptor.dart';
 import 'package:simple_live_app/requests/http_client.dart';
 
@@ -23,8 +23,6 @@ class GenericUsernameController extends GetxController {
   var loading = true.obs;
   var saving = false.obs;
 
-  String get _serverUrl => AppSettingsController.instance.serverUrl.value;
-
   @override
   void onInit() {
     super.onInit();
@@ -40,8 +38,10 @@ class GenericUsernameController extends GetxController {
   Future<void> _load() async {
     loading.value = true;
     try {
+      final serverUrl = await LiveApiFactory.resolveBaseUrl();
+      if (serverUrl.isEmpty) return;
       final result = await HttpClient.instance.getJson(
-        '$_serverUrl/api/v1/sites/$siteId/account/username',
+        '$serverUrl/api/v1/sites/$siteId/account/username',
       );
       final value = result['data']['username'] as String? ?? '';
       if (value.isNotEmpty) {
@@ -60,10 +60,15 @@ class GenericUsernameController extends GetxController {
       SmartDialog.showToast("用户名不能为空");
       return;
     }
+    final serverUrl = await LiveApiFactory.resolveBaseUrl();
+    if (serverUrl.isEmpty) {
+      SmartDialog.showToast("请先在设置中配置服务端地址");
+      return;
+    }
     saving.value = true;
     try {
-      await HttpClient.instance.postJson(
-        '$_serverUrl/api/v1/sites/$siteId/account/username',
+      await HttpClient.instance.putJson(
+        '$serverUrl/api/v1/sites/$siteId/account/username',
         data: {'username': value},
       );
       SmartDialog.showToast("已保存");
@@ -77,10 +82,12 @@ class GenericUsernameController extends GetxController {
   }
 
   Future<void> clear() async {
+    final serverUrl = await LiveApiFactory.resolveBaseUrl();
+    if (serverUrl.isEmpty) return;
     saving.value = true;
     try {
       await HttpClient.instance.dio.delete(
-        '$_serverUrl/api/v1/sites/$siteId/account/username',
+        '$serverUrl/api/v1/sites/$siteId/account/username',
       );
       usernameController.clear();
       SmartDialog.showToast("已清除");

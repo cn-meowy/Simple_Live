@@ -28,6 +28,13 @@ import 'package:simple_live_app/requests/http_client.dart';
 class LiveApiFactory {
   static LiveApiService? _instance;
 
+  /// 解析后的有效 baseUrl（含端口），供账号/同步等直连 HTTP 调用使用。
+  ///
+  /// - 本机地址：[EmbeddedLiveServer.start] 返回值（含实际绑定端口）。
+  /// - 远端地址：原始配置的 serverUrl（端口由地址指定）。
+  /// - 未配置 / 启动失败 / 测试 override 路径：null（[resolveBaseUrl] 回退到 serverUrl）。
+  static String? _resolvedBaseUrl;
+
   /// 创建实例的互斥锁：reset() 后并发的 instanceAsync 调用只允许一个进入
   /// _createInstanceAsync，其余等待同一个 Completer，确保所有调用方拿到
   /// 同一个新实例（避免并发各自创建、部分拿到旧实例）。
@@ -97,6 +104,7 @@ class LiveApiFactory {
 
     if (serverUrl.isEmpty) {
       settings.embeddedServerStatus.value = 'disabled';
+      _resolvedBaseUrl = null;
       throw StateError('未配置服务端地址');
     }
 
@@ -125,6 +133,7 @@ class LiveApiFactory {
         final baseUrl = await EmbeddedLiveServer.instance
             .start(host: host, port: port);
         settings.embeddedServerStatus.value = 'running';
+        _resolvedBaseUrl = baseUrl;
         return RemoteLiveApi(baseUrl);
       } catch (e) {
         settings.embeddedServerStatus.value = 'error: $e';
@@ -135,6 +144,7 @@ class LiveApiFactory {
     // 非本机：关闭内嵌服务，用远程地址（异步检测可用性，不阻塞实例创建）
     await EmbeddedLiveServer.instance.stop();
     settings.embeddedServerStatus.value = 'remote:checking';
+    _resolvedBaseUrl = serverUrl;
     // 不 await 检测，避免阻塞实例创建和后续 API 调用；
     // 检查 serverUrl 是否仍为被检测的 url，仅在未变更时更新状态，防止覆盖用户新地址的检测结果
     _checkRemoteAvailable(serverUrl);
@@ -158,6 +168,24 @@ class LiveApiFactory {
   /// 当服务端地址变更时调用，下次访问 [instance] 时会重新创建并按需启停内嵌服务。
   static void reset() {
     _instance = null;
+    _resolvedBaseUrl = null;
+  }
+
+  /// 解析当前服务端的有效基址（含端口），供账号/同步等直连 HTTP 调用使用。
+  ///
+  /// 与 [instance]（RemoteLiveApi）构造所用 baseUrl 完全一致：
+  /// - 本机地址：确保 [EmbeddedLiveServer] 已启动，返回其绑定 baseUrl（含实际端口）。
+  /// - 远端地址：返回配置的 serverUrl（端口由地址指定）。
+  /// - 未配置 / 启动失败：返回空字符串（调用方已有空值兜底）。
+  static Future<String> resolveBaseUrl() async {
+    final serverUrl = AppSettingsController.instance.serverUrl.value;
+    if (serverUrl.isEmpty) return '';
+    try {
+      await instanceAsync; // 幂等、互斥；本机模式确保 embedded server 已启动
+    } catch (_) {
+      return '';
+    }
+    return _resolvedBaseUrl ?? serverUrl;
   }
 
   /// 检测服务端是否可用

@@ -7,6 +7,7 @@ import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_app/app/event_bus.dart';
 import 'package:simple_live_app/app/constant.dart';
 import 'package:simple_live_app/app/log.dart';
+import 'package:simple_live_app/app/services/live_api_factory.dart';
 import 'package:simple_live_app/models/db/follow_user.dart';
 import 'package:simple_live_app/models/db/follow_user_tag.dart';
 import 'package:simple_live_app/models/db/history.dart';
@@ -48,8 +49,8 @@ class ServerSyncService extends GetxService {
     super.onClose();
   }
 
-  /// 获取服务端地址
-  String get _serverUrl => AppSettingsController.instance.serverUrl.value;
+  /// 解析服务端有效 baseUrl（含端口）
+  Future<String> _resolveServerUrl() => LiveApiFactory.resolveBaseUrl();
 
   /// 获取设备 ID（用于数据分区）
   String get _deviceId {
@@ -63,9 +64,10 @@ class ServerSyncService extends GetxService {
 
   /// 检测服务端可用性
   Future<bool> checkServerAvailable() async {
-    if (_serverUrl.isEmpty) return false;
+    final serverUrl = await _resolveServerUrl();
+    if (serverUrl.isEmpty) return false;
     try {
-      final result = await HttpClient.instance.getText('$_serverUrl/health');
+      final result = await HttpClient.instance.getText('$serverUrl/health');
       return result == 'ok';
     } catch (e) {
       Log.d('服务端不可用: $e');
@@ -90,7 +92,8 @@ class ServerSyncService extends GetxService {
   /// 执行全量同步（关注+标签+观看记录+屏蔽词）
   Future<void> syncAll() async {
     if (syncing.value) return;
-    if (_serverUrl.isEmpty) {
+    final serverUrl = await _resolveServerUrl();
+    if (serverUrl.isEmpty) {
       SmartDialog.showToast("请先配置服务端地址");
       return;
     }
@@ -139,6 +142,8 @@ class ServerSyncService extends GetxService {
 
   /// 同步关注列表和标签（必须同时同步）
   Future<void> syncFollowAndTag() async {
+    final serverUrl = await _resolveServerUrl();
+    if (serverUrl.isEmpty) return;
     syncStatus.value = "正在同步关注列表...";
 
     // 上传本地关注列表
@@ -146,7 +151,7 @@ class ServerSyncService extends GetxService {
     final followJson = localFollows.map((e) => e.toJson()).toList();
 
     final followResult = await HttpClient.instance.postJson(
-      '$_serverUrl/api/v1/sync/follow',
+      '$serverUrl/api/v1/sync/follow',
       data: followJson,
       header: {'X-Device-Id': _deviceId},
     );
@@ -170,7 +175,7 @@ class ServerSyncService extends GetxService {
     final tagJson = localTags.map((e) => e.toJson()).toList();
 
     final tagResult = await HttpClient.instance.postJson(
-      '$_serverUrl/api/v1/sync/tag',
+      '$serverUrl/api/v1/sync/tag',
       data: tagJson,
       header: {'X-Device-Id': _deviceId},
     );
@@ -189,13 +194,15 @@ class ServerSyncService extends GetxService {
 
   /// 同步观看记录
   Future<void> syncHistory() async {
+    final serverUrl = await _resolveServerUrl();
+    if (serverUrl.isEmpty) return;
     syncStatus.value = "正在同步观看记录...";
 
     final localHistories = DBService.instance.getHistores();
     final historyJson = localHistories.map((e) => e.toJson()).toList();
 
     final result = await HttpClient.instance.postJson(
-      '$_serverUrl/api/v1/sync/history',
+      '$serverUrl/api/v1/sync/history',
       data: historyJson,
       header: {'X-Device-Id': _deviceId},
     );
@@ -214,12 +221,14 @@ class ServerSyncService extends GetxService {
 
   /// 同步屏蔽词
   Future<void> syncBlockedWords() async {
+    final serverUrl = await _resolveServerUrl();
+    if (serverUrl.isEmpty) return;
     syncStatus.value = "正在同步屏蔽词...";
 
     final localWords = LocalStorageService.instance.shieldBox.values.toList();
 
     final result = await HttpClient.instance.postJson(
-      '$_serverUrl/api/v1/sync/blocked_word',
+      '$serverUrl/api/v1/sync/blocked_word',
       data: localWords,
       header: {'X-Device-Id': _deviceId},
     );
@@ -241,12 +250,14 @@ class ServerSyncService extends GetxService {
 
   /// 从服务端拉取 Cookie
   Future<void> syncCookies() async {
+    final serverUrl = await _resolveServerUrl();
+    if (serverUrl.isEmpty) return;
     syncStatus.value = "正在同步Cookie...";
 
     // 拉取 B站 Cookie
     try {
       final bilibiliResult = await HttpClient.instance.getJson(
-        '$_serverUrl/api/v1/cookie/bilibili',
+        '$serverUrl/api/v1/cookie/bilibili',
         header: {'X-Device-Id': _deviceId},
       );
       if (bilibiliResult['code'] == 0) {
@@ -267,7 +278,7 @@ class ServerSyncService extends GetxService {
     // 拉取抖音 Cookie
     try {
       final douyinResult = await HttpClient.instance.getJson(
-        '$_serverUrl/api/v1/cookie/douyin',
+        '$serverUrl/api/v1/cookie/douyin',
         header: {'X-Device-Id': _deviceId},
       );
       if (douyinResult['code'] == 0) {
@@ -287,7 +298,8 @@ class ServerSyncService extends GetxService {
 
   /// 仅拉取数据（不合并，只从服务端获取）
   Future<void> pullData() async {
-    if (_serverUrl.isEmpty) {
+    final serverUrl = await _resolveServerUrl();
+    if (serverUrl.isEmpty) {
       SmartDialog.showToast("请先配置服务端地址");
       return;
     }
@@ -302,7 +314,7 @@ class ServerSyncService extends GetxService {
 
       // 拉取关注列表
       final followResult = await HttpClient.instance.getJson(
-        '$_serverUrl/api/v1/sync/follow',
+        '$serverUrl/api/v1/sync/follow',
         header: {'X-Device-Id': _deviceId},
       );
       if (followResult['code'] == 0) {
@@ -316,7 +328,7 @@ class ServerSyncService extends GetxService {
 
       // 拉取标签
       final tagResult = await HttpClient.instance.getJson(
-        '$_serverUrl/api/v1/sync/tag',
+        '$serverUrl/api/v1/sync/tag',
         header: {'X-Device-Id': _deviceId},
       );
       if (tagResult['code'] == 0) {
