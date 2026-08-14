@@ -83,6 +83,10 @@ Apple TV 客户端的架构与转封装流程见 [simple_live_apple_tv/MeowLive/
 cd simple_live_server_nodejs
 docker compose up -d
 ```
+### docker 一键启动脚本
+```bash
+docker run -d --name meow_live --restart always  xiaosheng078/simple-live-server
+```
 
 详细部署、环境变量、演示模式配置见 [simple_live_server_nodejs/README.md](simple_live_server_nodejs/README.md)。
 
