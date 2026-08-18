@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
+import 'package:simple_live_app/app/log.dart';
 import 'package:simple_live_app/app/sites.dart';
 import 'package:simple_live_app/requests/http_client.dart';
 import 'package:simple_live_app/core/simple_live_core.dart';
 
+import 'danmaku_data_codec.dart';
 import 'live_api_service.dart';
 
 /// 远程 LiveApi 实现
@@ -17,7 +19,13 @@ class RemoteLiveApi implements LiveApiService {
   @override
   Future<List<Map<String, dynamic>>> getSites() async {
     final result = await _getJson('/api/v1/sites');
-    final list = result['data'] as List<dynamic>;
+    final data = result['data'];
+    if (data is! List) {
+      Log.w(
+          'RemoteLiveApi.getSites: data is not List, actual=${data.runtimeType}, raw=$result');
+      return <Map<String, dynamic>>[];
+    }
+    final list = data;
     return list.map((e) {
       final m = e as Map<String, dynamic>;
       return <String, dynamic>{
@@ -119,7 +127,7 @@ class RemoteLiveApi implements LiveApiService {
   @override
   Future<LiveRoomDetail> getRoomDetail(String siteId, String roomId) async {
     final result = await _getJson('/api/v1/sites/$siteId/rooms/$roomId');
-    return roomDetailFromJson(result['data'] as Map<String, dynamic>);
+    return roomDetailFromJson(result['data'] as Map<String, dynamic>, siteId);
   }
 
   @override
@@ -139,7 +147,7 @@ class RemoteLiveApi implements LiveApiService {
   Future<LivePlayUrl> getPlayUrls(String siteId, LiveRoomDetail detail, LivePlayQuality quality) async {
     final result = await _postJson(
       '/api/v1/sites/$siteId/rooms/${detail.roomId}/play-urls',
-      data: {'detail': _roomDetailToJson(detail), 'quality': _playQualityToJson(quality, siteId)},
+      data: {'detail': _roomDetailToJson(detail, siteId), 'quality': _playQualityToJson(quality, siteId)},
     );
     return _playUrlFromJson(result['data'] as Map<String, dynamic>);
   }
@@ -236,7 +244,7 @@ class RemoteLiveApi implements LiveApiService {
   }
 
   @visibleForTesting
-  LiveRoomDetail roomDetailFromJson(Map<String, dynamic> json) {
+  LiveRoomDetail roomDetailFromJson(Map<String, dynamic> json, String siteId) {
     return LiveRoomDetail(
       roomId: json['roomId'] as String,
       title: json['title'] as String,
@@ -248,14 +256,14 @@ class RemoteLiveApi implements LiveApiService {
       notice: json['notice'] as String?,
       status: json['status'] as bool,
       data: _decodeDynamic(json['data']),
-      danmakuData: _decodeDynamic(json['danmakuData']),
+      danmakuData: decodeDanmakuData(json['danmakuData'], siteId),
       url: json['url'] as String,
       isRecord: json['isRecord'] as bool? ?? false,
       showTime: json['showTime'] as String?,
     );
   }
 
-  Map<String, dynamic> _roomDetailToJson(LiveRoomDetail detail) {
+  Map<String, dynamic> _roomDetailToJson(LiveRoomDetail detail, String siteId) {
     return {
       'roomId': detail.roomId,
       'title': detail.title,
@@ -267,7 +275,7 @@ class RemoteLiveApi implements LiveApiService {
       'notice': detail.notice ?? '',
       'status': detail.status,
       'data': detail.data,
-      'danmakuData': detail.danmakuData,
+      'danmakuData': encodeDanmakuData(detail.danmakuData, siteId),
       'url': detail.url,
       'isRecord': detail.isRecord,
       'showTime': detail.showTime ?? '',
@@ -341,6 +349,21 @@ class RemoteLiveApi implements LiveApiService {
   dynamic _encodeQualityData(dynamic value, String siteId) {
     if (value == null) return null;
     if (value is String || value is num || value is bool) return value;
+    // 虎牙：data 为 {urls: List<HuyaLineModel|Map>, bitRate: int}，
+    // 必须在 `value is Map` 兜底之前处理，确保 urls 内的元素都被
+    // 规整为可序列化 Map（客户端从 /qualities 拿到的可能是 Map 而非
+    // HuyaLineModel 实例）。
+    if (siteId == 'huya' && value is Map) {
+      final urls = value['urls'];
+      return {
+        'urls': urls is List
+            ? urls
+                .map((u) => u is HuyaLineModel ? u.toJson() : u)
+                .toList()
+            : urls,
+        'bitRate': value['bitRate'],
+      };
+    }
     if (value is List || value is Map) return value;
     // 斗鱼 DouyuPlayData
     if (siteId == 'douyu' && value is DouyuPlayData) {
@@ -352,6 +375,20 @@ class RemoteLiveApi implements LiveApiService {
   /// 根据平台还原 quality.data
   dynamic _decodeQualityData(dynamic value, String siteId) {
     if (value == null) return null;
+    // 虎牙：还原 urls 为 List<HuyaLineModel>，与服务端对称。
+    if (siteId == 'huya' && value is Map) {
+      final urls = value['urls'];
+      return {
+        'urls': urls is List
+            ? urls
+                .map((u) => u is HuyaLineModel
+                    ? u
+                    : HuyaLineModel.fromJson(u as Map<String, dynamic>))
+                .toList()
+            : urls,
+        'bitRate': (value['bitRate'] as num?)?.toInt() ?? 0,
+      };
+    }
     // 斗鱼：还原为 DouyuPlayData
     if (siteId == 'douyu' && value is Map) {
       final rate = (value['rate'] as num?)?.toInt() ?? 0;

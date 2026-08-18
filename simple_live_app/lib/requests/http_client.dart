@@ -55,7 +55,7 @@ class HttpClient {
         throw HttpError(e.message ?? "",
             statusCode: e.response?.statusCode ?? 0);
       } else {
-        throw HttpError("发送GET请求失败");
+        throw HttpError(_describeDioError(e, "GET"));
       }
     }
   }
@@ -88,7 +88,7 @@ class HttpClient {
         throw HttpError(e.message ?? "",
             statusCode: e.response?.statusCode ?? 0);
       } else {
-        throw HttpError("发送GET请求失败");
+        throw HttpError(_describeDioError(e, "GET"));
       }
     }
   }
@@ -121,7 +121,7 @@ class HttpClient {
         throw HttpError(e.message ?? "",
             statusCode: e.response?.statusCode ?? 0);
       } else {
-        throw HttpError("发送GET请求失败");
+        throw HttpError(_describeDioError(e, "GET"));
       }
     }
   }
@@ -161,7 +161,7 @@ class HttpClient {
         throw HttpError(e.message ?? "",
             statusCode: e.response?.statusCode ?? 0);
       } else {
-        throw HttpError("发送POST请求失败");
+        throw HttpError(_describeDioError(e, "POST"));
       }
     }
   }
@@ -201,7 +201,7 @@ class HttpClient {
         throw HttpError(e.message ?? "",
             statusCode: e.response?.statusCode ?? 0);
       } else {
-        throw HttpError("发送PUT请求失败");
+        throw HttpError(_describeDioError(e, "PUT"));
       }
     }
   }
@@ -233,8 +233,19 @@ class HttpClient {
       if (e is DioException && e.type == DioExceptionType.badResponse) {
         return e.response!;
       } else {
-        throw HttpError("发送HEAD请求失败");
+        throw HttpError(_describeDioError(e, "HEAD"));
       }
     }
+  }
+
+  /// 把 Dio 异常归类为可读的描述，便于上层日志识别是连接被拒、超时、
+  /// 取消还是其它传输错误。透传 dio 的原始 message 字段。
+  String _describeDioError(Object e, String method) {
+    if (e is DioException) {
+      final type = e.type.name;
+      final msg = e.message ?? '';
+      return '发送$method请求失败(dio:$type${msg.isNotEmpty ? ", $msg" : ""})';
+    }
+    return '发送$method请求失败($e)';
   }
 }

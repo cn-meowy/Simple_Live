@@ -18,6 +18,7 @@ import 'package:simple_live_app/app/log.dart';
 import 'package:simple_live_app/app/services/script_site_service.dart';
 import 'package:simple_live_app/app/services/embedded_live_server.dart';
 import 'package:simple_live_app/app/services/sites_service.dart';
+import 'package:simple_live_app/app/sites.dart';
 import 'package:simple_live_app/app/utils.dart';
 import 'package:simple_live_app/app/utils/listen_fourth_button.dart';
 import 'package:simple_live_app/models/db/follow_user.dart';
@@ -123,6 +124,8 @@ Future initWindow() async {
 }
 
 Future initServices() async {
+  // 先构建内置站点注册表，避免依赖 ScriptSiteService 的注册时序
+  Sites.reload();
   Hive.registerAdapter(FollowUserAdapter());
   Hive.registerAdapter(HistoryAdapter());
   Hive.registerAdapter(FollowUserTagAdapter());

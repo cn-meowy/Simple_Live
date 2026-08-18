@@ -124,7 +124,7 @@ void main() {
         'url': 'x',
         'data': null,
         'danmakuData': null,
-      });
+      }, 'bilibili');
       expect(
         detail.cover,
         'http://127.0.0.1:9090/api/v1/stream/covers/HD.jpg',
@@ -147,7 +147,7 @@ void main() {
         'url': 'x',
         'data': null,
         'danmakuData': null,
-      });
+      }, 'bilibili');
       expect(detail.cover, absCover);
       expect(detail.userAvatar, absCover);
     });
@@ -164,7 +164,7 @@ void main() {
         'url': 'x',
         'data': null,
         'danmakuData': null,
-      });
+      }, 'bilibili');
       expect(detail.cover, '');
       expect(detail.userAvatar, '');
     });

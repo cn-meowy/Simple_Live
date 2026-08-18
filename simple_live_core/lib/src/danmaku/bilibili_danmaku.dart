@@ -57,7 +57,7 @@ class BiliBiliDanmaku implements LiveDanmaku {
   Future start(dynamic args) async {
     danmakuArgs = args as BiliBiliDanmakuArgs;
     webScoketUtils = WebScoketUtils(
-      url: "wss://${args.serverHost}/sub",
+      url: "wss://${args.serverHost}:443/sub",
       heartBeatTime: heartbeatTime,
       headers: args.cookie.isEmpty
           ? null

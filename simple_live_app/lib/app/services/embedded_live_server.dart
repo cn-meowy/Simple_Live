@@ -14,6 +14,8 @@ import 'package:simple_live_app/core/simple_live_core.dart';
 import 'package:simple_live_app/requests/http_client.dart';
 import 'package:simple_live_app/services/local_storage_service.dart';
 
+import 'danmaku_data_codec.dart';
+
 /// app 内嵌 HTTP 直播服务
 ///
 /// 用 shelf 实现，API 契约与 Node.js 服务端（`simple_live_server_nodejs`）
@@ -69,6 +71,16 @@ class EmbeddedLiveServer {
       await stop();
     }
 
+    // 防御性：确保 Sites.allSites 已填充内置站点。
+    // initServices() 通常已调用 Sites.reload()，但若由于运行时序问题
+    // （如 reload 在某次重启/日志未写入时丢失）allSites 为空，绑定后
+    // /api/v1/sites 会返回空列表，导致 iOS 真机首页空态。
+    if (Sites.allSites.isEmpty) {
+      Log.logPrint(
+          '[EmbeddedLiveServer] start: allSites was empty, calling Sites.reload()');
+      Sites.reload();
+    }
+
     final router = _buildRouter();
     final handler = const shelf.Pipeline()
         .addMiddleware(shelf.logRequests(logger: (msg, isError) {
@@ -118,7 +130,7 @@ class EmbeddedLiveServer {
     _currentHost = host;
     _currentPort = actualPort;
     baseUrl = 'http://$host:$actualPort';
-    Log.d('EmbeddedLiveServer serving at $baseUrl');
+    Log.d('[EmbeddedLiveServer] bound host=$host port=$actualPort baseUrl=$baseUrl');
     return baseUrl!;
   }
 
@@ -212,6 +224,12 @@ class EmbeddedLiveServer {
 
   Future<shelf.Response> _sitesHandler(shelf.Request request) async {
     try {
+      // 防御性：万一 allSites 在请求处理时仍为空（极端时序问题），最后一次兜底
+      if (Sites.allSites.isEmpty) {
+        Log.logPrint(
+            '[EmbeddedLiveServer] _sitesHandler: allSites was empty, calling Sites.reload()');
+        Sites.reload();
+      }
       final sites = Sites.allSites.values
           .where((s) => s.id != Constant.kLocal) // 本地服务不暴露"本地"虚拟平台
           .map((s) {
@@ -221,8 +239,13 @@ class EmbeddedLiveServer {
             return entry;
           })
           .toList();
+      // 使用 Log.logPrint（无去重阈值）便于诊断
+      Log.logPrint(
+          '[EmbeddedLiveServer] GET /api/v1/sites allSitesCount=${Sites.allSites.length} returned=${sites.length}');
       return _ok(sites);
     } catch (e) {
+      Log.e('[EmbeddedLiveServer] GET /api/v1/sites failed: $e',
+          StackTrace.current);
       return _error(e);
     }
   }
@@ -307,7 +330,7 @@ class EmbeddedLiveServer {
       final siteId = request.params['siteId']!;
       final roomId = request.params['roomId']!;
       final detail = await _getSite(siteId).getRoomDetail(roomId: roomId);
-      return _ok(_roomDetailToJson(detail));
+      return _ok(_roomDetailToJson(detail, siteId));
     } catch (e) {
       return _error(e);
     }
@@ -350,7 +373,7 @@ class EmbeddedLiveServer {
       if (detailJson == null || qualityJson == null) {
         return _badRequest('请求体需包含 detail 和 quality 字段');
       }
-      final detail = _roomDetailFromJson(detailJson);
+      final detail = _roomDetailFromJson(detailJson, siteId);
       final quality = _playQualityFromJson(qualityJson, siteId);
       final playUrl =
           await _getSite(siteId).getPlayUrls(detail: detail, quality: quality);
@@ -653,6 +676,7 @@ class EmbeddedLiveServer {
   }
 
   shelf.Response _badRequest(String msg) {
+    Log.w('[EmbeddedLiveServer] 400 bad request: $msg');
     return shelf.Response(
       400,
       body: json.encode({'code': 400, 'data': null, 'msg': msg}),
@@ -661,6 +685,7 @@ class EmbeddedLiveServer {
   }
 
   shelf.Response _notFound(String msg) {
+    Log.w('[EmbeddedLiveServer] 404 not found: $msg');
     return shelf.Response(
       404,
       body: json.encode({'code': 404, 'data': null, 'msg': msg}),
@@ -671,6 +696,9 @@ class EmbeddedLiveServer {
   shelf.Response _error(Object e) {
     final msg = e is Error ? e.toString() : e.toString();
     final isArgError = e is ArgumentError;
+    Log.e(
+        '[EmbeddedLiveServer] ${isArgError ? 404 : 500} error: $msg',
+        e is Error ? e.stackTrace ?? StackTrace.current : StackTrace.current);
     return shelf.Response(
       isArgError ? 404 : 500,
       body: json.encode({
@@ -741,7 +769,7 @@ class EmbeddedLiveServer {
     };
   }
 
-  Map<String, dynamic> _roomDetailToJson(LiveRoomDetail detail) {
+  Map<String, dynamic> _roomDetailToJson(LiveRoomDetail detail, String siteId) {
     return {
       'roomId': detail.roomId,
       'title': detail.title,
@@ -753,14 +781,14 @@ class EmbeddedLiveServer {
       'notice': detail.notice ?? '',
       'status': detail.status,
       'data': _encodeDynamic(detail.data),
-      'danmakuData': _encodeDynamic(detail.danmakuData),
+      'danmakuData': encodeDanmakuData(detail.danmakuData, siteId),
       'url': detail.url,
       'isRecord': detail.isRecord,
       'showTime': detail.showTime ?? '',
     };
   }
 
-  LiveRoomDetail _roomDetailFromJson(Map<String, dynamic> json) {
+  LiveRoomDetail _roomDetailFromJson(Map<String, dynamic> json, String siteId) {
     return LiveRoomDetail(
       roomId: json['roomId'] as String,
       title: json['title'] as String,
@@ -773,7 +801,7 @@ class EmbeddedLiveServer {
       status: json['status'] as bool,
       url: json['url'] as String,
       data: _decodeDynamic(json['data']),
-      danmakuData: _decodeDynamic(json['danmakuData']),
+      danmakuData: decodeDanmakuData(json['danmakuData'], siteId),
       isRecord: json['isRecord'] as bool? ?? false,
       showTime: json['showTime'] as String?,
     );
@@ -833,6 +861,21 @@ class EmbeddedLiveServer {
   dynamic _encodeQualityData(dynamic value, String siteId) {
     if (value == null) return null;
     if (value is String || value is num || value is bool) return value;
+    // 虎牙：data 为 {urls: List<HuyaLineModel>, bitRate: int}，
+    // 必须在 `value is Map` 兜底之前处理，否则 Map 内的 HuyaLineModel
+    // 实例会原样透传，导致后续 json.encode 抛
+    // "Converting object to an encodable object failed"。
+    if (siteId == 'huya' && value is Map) {
+      final urls = value['urls'];
+      return {
+        'urls': urls is List
+            ? urls
+                .map((u) => u is HuyaLineModel ? u.toJson() : u)
+                .toList()
+            : urls,
+        'bitRate': value['bitRate'],
+      };
+    }
     if (value is List || value is Map) return value;
     // 斗鱼 DouyuPlayData
     if (siteId == 'douyu' && value is DouyuPlayData) {
@@ -844,6 +887,21 @@ class EmbeddedLiveServer {
   /// 反序列化 quality.data（按 siteId，与 RemoteLiveApi._decodeQualityData 对称）
   dynamic _decodeQualityData(dynamic value, String siteId) {
     if (value == null) return null;
+    // 虎牙：还原 urls 为 List<HuyaLineModel>，供 HuyaSite.getPlayUrls
+    // 中的 `element as HuyaLineModel` 强转使用。
+    if (siteId == 'huya' && value is Map) {
+      final urls = value['urls'];
+      return {
+        'urls': urls is List
+            ? urls
+                .map((u) => u is HuyaLineModel
+                    ? u
+                    : HuyaLineModel.fromJson(u as Map<String, dynamic>))
+                .toList()
+            : urls,
+        'bitRate': (value['bitRate'] as num?)?.toInt() ?? 0,
+      };
+    }
     // 斗鱼：还原为 DouyuPlayData
     if (siteId == 'douyu' && value is Map) {
       final rate = (value['rate'] as num?)?.toInt() ?? 0;

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:simple_live_app/app/constant.dart';
 import 'package:simple_live_app/app/log.dart';
 import 'package:simple_live_app/app/services/live_api_factory.dart';
+import 'package:simple_live_app/app/services/sites_service.dart';
 import 'package:simple_live_app/app/sites.dart';
 import 'package:simple_live_app/app/utils/server_url_util.dart';
 import 'package:simple_live_app/services/local_storage_service.dart';
@@ -177,6 +178,18 @@ class AppSettingsController extends GetxController {
         Log.logPrint(e);
       });
     }
+
+    // 监听服务端地址变更，动态重拉远程站点列表。
+    // 用数据层驱动取代 UI 事件手动触发：用户在设置页录入/修改地址（无论
+    // 失焦/测试连接/直接返回）后，首页/分类/搜索 Tab 都能即时更新；
+    // 地址清空时也会触发（LiveApiFactory 抛错 → fetchRemoteSites 清空 remoteSites）。
+    ever<String>(serverUrl, (_) {
+      try {
+        SitesService.instance.fetchRemoteSites();
+      } catch (e) {
+        Log.w('serverUrl 变化时拉取站点失败: $e');
+      }
+    });
   }
 
   void initSiteSort() {

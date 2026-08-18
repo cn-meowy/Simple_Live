@@ -38,11 +38,16 @@ class SitesService extends GetxService {
   /// 成功后按 `siteSort` 重排 `remoteSites`，新站点追加末尾并持久化排序。
   /// 失败或返回空时 `remoteSites` 保持为空（不回退到本地），不抛异常。
   Future<void> fetchRemoteSites() async {
+    final settings = AppSettingsController.instance;
+    final url = settings.serverUrl.value;
+    Log.d('fetchRemoteSites start: serverUrl=$url');
     try {
       final api = await LiveApiFactory.instanceAsync;
+      Log.d('fetchRemoteSites: instance ready, requesting /api/v1/sites');
       final list = await api.getSites();
+      Log.d('fetchRemoteSites: response count=${list.length}');
       if (list.isEmpty) {
-        Log.w('后端返回空站点列表');
+        Log.w('后端返回空站点列表 url=$url');
         return;
       }
 
@@ -63,8 +68,11 @@ class SitesService extends GetxService {
       remoteSites.assignAll(newSites);
       _syncSiteSort(remoteSites.map((s) => s.id).toList());
       Log.d('远程站点列表拉取成功: ${remoteSites.length} 个');
+    } on TypeError catch (e, s) {
+      Log.e('解析 /sites 响应失败 url=$url, error=$e', s);
+      remoteSites.clear();
     } catch (e, s) {
-      Log.e('拉取远程站点列表失败', s);
+      Log.e('拉取远程站点列表失败 url=$url, error=$e', s);
       remoteSites.clear();
     }
   }

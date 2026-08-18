@@ -14,6 +14,7 @@ import 'package:simple_live_app/app/constant.dart';
 import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_app/app/event_bus.dart';
 import 'package:simple_live_app/app/log.dart';
+import 'package:simple_live_app/app/services/danmaku_data_codec.dart';
 import 'package:simple_live_app/app/services/live_api_factory.dart';
 import 'package:simple_live_app/app/sites.dart';
 import 'package:simple_live_app/app/utils.dart';
@@ -957,14 +958,25 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
       naviteUrl = "bilibili://live/${detail.value?.roomId}";
       webUrl = "https://live.bilibili.com/${detail.value?.roomId}";
     } else if (site.id == Constant.kDouyin) {
-      var args = detail.value?.danmakuData as DouyinDanmakuArgs;
-      naviteUrl = "snssdk1128://webcast_room?room_id=${args.roomId}";
-      webUrl = "https://live.douyin.com/${args.webRid}";
+      final raw = decodeDanmakuData(detail.value?.danmakuData, Constant.kDouyin);
+      final args = raw is DouyinDanmakuArgs ? raw : null;
+      webUrl = "https://live.douyin.com/${detail.value?.roomId}";
+      if (args != null) {
+        naviteUrl = "snssdk1128://webcast_room?room_id=${args.roomId}";
+        webUrl = "https://live.douyin.com/${args.webRid}";
+      } else {
+        SmartDialog.showToast("无法获取参数，将使用浏览器打开");
+      }
     } else if (site.id == Constant.kHuya) {
-      var args = detail.value?.danmakuData as HuyaDanmakuArgs;
-      naviteUrl =
-          "yykiwi://homepage/index.html?banneraction=https%3A%2F%2Fdiy-front.cdn.huya.com%2Fzt%2Ffrontpage%2Fcc%2Fupdate.html%3Fhyaction%3Dlive%26channelid%3D${args.subSid}%26subid%3D${args.subSid}%26liveuid%3D${args.subSid}%26screentype%3D1%26sourcetype%3D0%26fromapp%3Dhuya_wap%252Fclick%252Fopen_app_guide%26&fromapp=huya_wap/click/open_app_guide";
+      final raw = decodeDanmakuData(detail.value?.danmakuData, Constant.kHuya);
+      final args = raw is HuyaDanmakuArgs ? raw : null;
       webUrl = "https://www.huya.com/${detail.value?.roomId}";
+      if (args != null) {
+        naviteUrl =
+            "yykiwi://homepage/index.html?banneraction=https%3A%2F%2Fdiy-front.cdn.huya.com%2Fzt%2Ffrontpage%2Fcc%2Fupdate.html%3Fhyaction%3Dlive%26channelid%3D${args.subSid}%26subid%3D${args.subSid}%26liveuid%3D${args.subSid}%26screentype%3D1%26sourcetype%3D0%26fromapp%3Dhuya_wap%252Fclick%252Fopen_app_guide%26&fromapp=huya_wap/click/open_app_guide";
+      } else {
+        SmartDialog.showToast("无法获取参数，将使用浏览器打开");
+      }
     } else if (site.id == Constant.kDouyu) {
       naviteUrl =
           "douyulink://?type=90001&schemeUrl=douyuapp%3A%2F%2Froom%3FliveType%3D0%26rid%3D${detail.value?.roomId}";

@@ -681,15 +681,30 @@ class HuyaUrlDataModel {
     required this.uid,
   });
 
-  @override
-  String toString() {
-    return json.encode({
+  Map<String, dynamic> toJson() {
+    return {
       "url": url,
       "uid": uid,
-      "lines": lines.map((e) => e.toString()).toList(),
-      "bitRates": bitRates.map((e) => e.toString()).toList(),
-    });
+      "lines": lines.map((e) => e.toJson()).toList(),
+      "bitRates": bitRates.map((e) => e.toJson()).toList(),
+    };
   }
+
+  factory HuyaUrlDataModel.fromJson(Map<String, dynamic> json) {
+    return HuyaUrlDataModel(
+      url: json['url'] as String,
+      uid: json['uid'] as String,
+      lines: (json['lines'] as List)
+          .map((e) => HuyaLineModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      bitRates: (json['bitRates'] as List)
+          .map((e) => HuyaBitRateModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  @override
+  String toString() => json.encode(toJson());
 }
 
 enum HuyaLineType {
@@ -718,18 +733,47 @@ class HuyaLineModel {
     required this.presenterUid,
   });
 
-  @override
-  String toString() {
-    return json.encode({
+  /// 解析 lineType，兼容 `flv`/`hls` 与 `HuyaLineType.flv`/`HuyaLineType.hls`
+  /// 两种历史序列化形态（Node 服务端 `_encodeDynamic` 的 toString 兜底路径
+  /// 可能产出后者）。
+  static HuyaLineType _parseLineType(Object? raw) {
+    if (raw is HuyaLineType) return raw;
+    final s = raw?.toString() ?? '';
+    final name = s.startsWith('HuyaLineType.') ? s.substring('HuyaLineType.'.length) : s;
+    for (final e in HuyaLineType.values) {
+      if (e.name == name) return e;
+    }
+    throw FormatException('未知的 HuyaLineType 值: $raw');
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
       "line": line,
       "cdnType": cdnType,
       "flvAntiCode": flvAntiCode,
       "hlsAntiCode": hlsAntiCode,
       "streamName": streamName,
-      "lineType": lineType.toString(),
+      "lineType": lineType.name,
+      "bitRate": bitRate,
       "presenterUid": presenterUid,
-    });
+    };
   }
+
+  factory HuyaLineModel.fromJson(Map<String, dynamic> json) {
+    return HuyaLineModel(
+      line: json['line'] as String,
+      cdnType: json['cdnType'] as String,
+      flvAntiCode: json['flvAntiCode'] as String,
+      hlsAntiCode: json['hlsAntiCode'] as String,
+      streamName: json['streamName'] as String,
+      lineType: _parseLineType(json['lineType']),
+      bitRate: (json['bitRate'] as num?)?.toInt() ?? 0,
+      presenterUid: (json['presenterUid'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  @override
+  String toString() => json.encode(toJson());
 }
 
 class HuyaBitRateModel {
@@ -741,11 +785,20 @@ class HuyaBitRateModel {
     required this.name,
   });
 
-  @override
-  String toString() {
-    return json.encode({
+  Map<String, dynamic> toJson() {
+    return {
       "name": name,
       "bitRate": bitRate,
-    });
+    };
   }
+
+  factory HuyaBitRateModel.fromJson(Map<String, dynamic> json) {
+    return HuyaBitRateModel(
+      name: json['name'] as String,
+      bitRate: (json['bitRate'] as num).toInt(),
+    );
+  }
+
+  @override
+  String toString() => json.encode(toJson());
 }

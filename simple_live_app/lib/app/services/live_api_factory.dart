@@ -166,7 +166,19 @@ class LiveApiFactory {
   /// 重置实例
   ///
   /// 当服务端地址变更时调用，下次访问 [instance] 时会重新创建并按需启停内嵌服务。
-  static void reset() {
+  ///
+  /// 若当前仍有 in-flight 创建（[_createCompleter] 非空），等待其完成后再清
+  /// `_instance`，避免后续 `fetchRemoteSites` 拿到一个尚未 bind 完成的实例
+  /// 导致异常被吞、空列表回退。
+  static Future<void> reset() async {
+    final pending = _createCompleter;
+    if (pending != null) {
+      try {
+        await pending.future;
+      } catch (_) {
+        // 创建失败：实例未被写入，_instance 仍为 null，无需额外处理
+      }
+    }
     _instance = null;
     _resolvedBaseUrl = null;
   }

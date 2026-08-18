@@ -26,8 +26,21 @@ class DouyinAccountService extends GetxService {
   }
 
   void setSite() {
-    var site = (Sites.allSites[Constant.kDouyin]!.liveSite as DouyinSite);
-    site.cookie = cookie;
+    // 防御性：异步路径（如 _syncCookieFromServer）可能在 allSites 未及时初始化时触发
+    if (Sites.allSites.isEmpty) {
+      Log.logPrint(
+          'DouyinAccountService.setSite: allSites was empty, calling Sites.reload()');
+      Sites.reload();
+    }
+    var site = Sites.allSites[Constant.kDouyin]?.liveSite;
+    if (site is DouyinSite) {
+      site.cookie = cookie;
+    } else {
+      Log.e(
+        "抖音站点未就绪，跳过 setSite（当前 sites: ${Sites.allSites.keys.join(",")}）",
+        StackTrace.current,
+      );
+    }
   }
 
   void setCookie(String cookie) {

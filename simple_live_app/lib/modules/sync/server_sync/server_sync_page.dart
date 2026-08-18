@@ -6,6 +6,7 @@ import 'package:simple_live_app/app/app_style.dart';
 import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_app/app/services/live_api_factory.dart';
 import 'package:simple_live_app/app/utils.dart';
+import 'package:simple_live_app/app/utils/embedded_server_url_resolver.dart';
 import 'package:simple_live_app/app/utils/server_url_util.dart';
 import 'package:simple_live_app/services/server_sync_service.dart';
 import 'package:simple_live_app/widgets/settings/settings_card.dart';
@@ -219,9 +220,17 @@ class _ServerSyncPageState extends State<ServerSyncPage> {
     }
     _urlController.text = url;
 
+    // 本机地址 + 未指定端口 + 内嵌服务已启动：用实际 baseUrl（含端口）
+    // 替换，避免 URL 端口缺失/不匹配导致测试失败。
+    final resolved = await EmbeddedServerUrlResolver.resolve(url);
+    if (resolved != _urlController.text) {
+      _urlController.text = resolved;
+    }
+    final testUrl = _urlController.text;
+
     SmartDialog.showLoading(msg: "正在测试连接...");
     try {
-      final available = await LiveApiFactory.checkServerAvailable(url);
+      final available = await LiveApiFactory.checkServerAvailable(testUrl);
       SmartDialog.dismiss(status: SmartStatus.loading);
       if (available) {
         SmartDialog.showToast("连接成功");

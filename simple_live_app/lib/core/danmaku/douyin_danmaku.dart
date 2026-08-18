@@ -39,16 +39,21 @@ class DouyinDanmaku implements LiveDanmaku {
   Function(String msg)? onClose;
   @override
   Function()? onReady;
-  String serverUrl = "wss://webcast3-ws-web-lq.douyin.com/webcast/im/push/v2/";
+  String serverUrl = "wss://webcast3-ws-web-lq.douyin.com:443/webcast/im/push/v2/";
   late DouyinDanmakuArgs danmakuArgs;
   WebScoketUtils? webScoketUtils;
 
   @override
   Future start(dynamic args) async {
-    danmakuArgs = args as DouyinDanmakuArgs;
+    if (args is! DouyinDanmakuArgs) {
+      onClose?.call("弹幕参数无效");
+      return;
+    }
+    danmakuArgs = args;
     var ts = DateTime.now().millisecondsSinceEpoch;
     var uri = Uri.parse(serverUrl).replace(
       scheme: "wss",
+      port: 443,
       queryParameters: {
         "app_name": "douyin_web",
         "version_code": "180800",

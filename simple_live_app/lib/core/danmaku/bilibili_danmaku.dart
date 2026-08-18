@@ -55,9 +55,13 @@ class BiliBiliDanmaku implements LiveDanmaku {
   late BiliBiliDanmakuArgs danmakuArgs;
   @override
   Future start(dynamic args) async {
-    danmakuArgs = args as BiliBiliDanmakuArgs;
+    if (args is! BiliBiliDanmakuArgs) {
+      onClose?.call("弹幕参数无效");
+      return;
+    }
+    danmakuArgs = args;
     webScoketUtils = WebScoketUtils(
-      url: "wss://${args.serverHost}/sub",
+      url: "wss://${args.serverHost}:443/sub",
       heartBeatTime: heartbeatTime,
       headers: args.cookie.isEmpty
           ? null

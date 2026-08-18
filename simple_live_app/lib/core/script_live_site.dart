@@ -1,6 +1,7 @@
 import 'package:simple_live_app/core/common/core_error.dart';
 import 'package:simple_live_app/core/common/core_log.dart';
 import 'package:simple_live_app/core/common/http_client.dart';
+import 'package:simple_live_app/app/services/danmaku_data_codec.dart';
 import 'package:simple_live_app/core/danmaku/bilibili_danmaku.dart';
 import 'package:simple_live_app/core/danmaku/douyin_danmaku.dart';
 import 'package:simple_live_app/core/danmaku/douyu_danmaku.dart';
@@ -54,6 +55,17 @@ import 'package:simple_live_app/core/scripts/js_runtime.dart';
 /// Dart 侧执行该请求后，将响应体（字符串）作为第一个参数、原调用参数
 /// 作为后续参数，调用名为 `parse` 的全局函数，其返回值同样可以是最终
 /// 结果或另一个请求描述符（支持链式请求）。
+///
+/// `getRoomDetail` 返回的 `danmakuData` 必须是 **Map**（按 siteId 匹配下表的
+/// key 集，类型必须严格匹配）。Dart 侧会在服务端 / 客户端边界把它还原为对应
+/// 平台弹幕组件所需的 Args 对象：
+///
+/// | siteId    | key 列表                                                                 |
+/// |-----------|--------------------------------------------------------------------------|
+/// | bilibili  | `roomId`(int) `token`(str) `buvid`(str) `serverHost`(str) `uid`(int) `cookie`(str) |
+/// | douyin    | `webRid`(str) `roomId`(str) `userId`(str) `cookie`(str)                  |
+/// | huya      | `ayyuid`(int) `topSid`(int) `subSid`(int)                                |
+/// | douyu     | 透传 String roomId，不需要 `danmakuData` 字段                            |
 ///
 /// ## 弹幕
 ///
@@ -351,7 +363,7 @@ class ScriptLiveSite implements LiveSite {
       notice: m['notice']?.toString(),
       status: m['status'] == true,
       data: m['data'],
-      danmakuData: m['danmakuData'],
+      danmakuData: decodeDanmakuData(m['danmakuData'], id),
       url: m['url']?.toString() ?? '',
       isRecord: m['isRecord'] == true,
       showTime: m['showTime']?.toString(),
@@ -410,7 +422,7 @@ class ScriptLiveSite implements LiveSite {
         'notice': d.notice,
         'status': d.status,
         'data': d.data,
-        'danmakuData': d.danmakuData,
+        'danmakuData': encodeDanmakuData(d.danmakuData, id),
         'url': d.url,
         'isRecord': d.isRecord,
         'showTime': d.showTime,

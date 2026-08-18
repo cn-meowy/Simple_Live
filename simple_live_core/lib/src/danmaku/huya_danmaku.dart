@@ -37,7 +37,7 @@ class HuyaDanmaku implements LiveDanmaku {
   Function(String msg)? onClose;
   @override
   Function()? onReady;
-  String serverUrl = "wss://cdnws.api.huya.com";
+  String serverUrl = "wss://cdnws.api.huya.com:443";
 
   WebScoketUtils? webScoketUtils;
 

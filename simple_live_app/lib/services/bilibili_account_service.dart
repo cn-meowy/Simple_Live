@@ -59,9 +59,22 @@ class BiliBiliAccountService extends GetxService {
   }
 
   void setSite() {
-    var site = (Sites.allSites[Constant.kBiliBili]!.liveSite as BiliBiliSite);
-    site.userId = uid;
-    site.cookie = cookie;
+    // 防御性：异步路径可能在 allSites 未及时初始化时触发
+    if (Sites.allSites.isEmpty) {
+      Log.logPrint(
+          'BiliBiliAccountService.setSite: allSites was empty, calling Sites.reload()');
+      Sites.reload();
+    }
+    var site = Sites.allSites[Constant.kBiliBili]?.liveSite;
+    if (site is BiliBiliSite) {
+      site.userId = uid;
+      site.cookie = cookie;
+    } else {
+      Log.e(
+        "哔哩哔哩站点未就绪，跳过 setSite（当前 sites: ${Sites.allSites.keys.join(",")}）",
+        StackTrace.current,
+      );
+    }
   }
 
   void setCookie(String cookie) {

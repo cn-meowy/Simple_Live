@@ -37,7 +37,7 @@ class HuyaDanmaku implements LiveDanmaku {
   Function(String msg)? onClose;
   @override
   Function()? onReady;
-  String serverUrl = "wss://cdnws.api.huya.com";
+  String serverUrl = "wss://cdnws.api.huya.com:443";
 
   WebScoketUtils? webScoketUtils;
 
@@ -47,7 +47,11 @@ class HuyaDanmaku implements LiveDanmaku {
 
   @override
   Future start(dynamic args) async {
-    danmakuArgs = args as HuyaDanmakuArgs;
+    if (args is! HuyaDanmakuArgs) {
+      onClose?.call("弹幕参数无效");
+      return;
+    }
+    danmakuArgs = args;
     webScoketUtils = WebScoketUtils(
       url: serverUrl,
       heartBeatTime: heartbeatTime,

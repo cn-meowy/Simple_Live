@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:remixicon/remixicon.dart';
@@ -6,6 +7,7 @@ import 'package:simple_live_app/app/app_style.dart';
 import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_app/app/services/live_api_factory.dart';
 import 'package:simple_live_app/app/services/sites_service.dart';
+import 'package:simple_live_app/app/utils/embedded_server_url_resolver.dart';
 import 'package:simple_live_app/app/utils/server_url_util.dart';
 import 'package:simple_live_app/routes/route_path.dart';
 import 'package:simple_live_app/widgets/settings/settings_card.dart';
@@ -49,7 +51,10 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
     super.dispose();
   }
 
-  /// 输入框失焦时：地址变更则持久化、重置 API 实例并重新拉取站点列表
+  /// 输入框失焦时：地址变更则持久化、重置 API 实例
+  ///
+  /// 站点列表的重新拉取由 AppSettingsController 中 ever(serverUrl) 监听器
+  /// 在 setServerUrl() 触发时统一处理，避免与本方法双重调用。
   void _onUrlFocusChanged() {
     if (_urlFocusNode.hasFocus) return;
     final value = _normalizeUrl(_urlController.text);
@@ -57,9 +62,7 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
     _urlController.text = value;
     AppSettingsController.instance.setServerUrl(value);
     // 地址变更时重置 LiveApiFactory，下次访问会按需启停内嵌服务
-    LiveApiFactory.reset();
-    // 重新拉取站点列表，刷新首页/分类/搜索 Tab
-    SitesService.instance.fetchRemoteSites();
+    unawaited(LiveApiFactory.reset());
   }
 
   /// 规范化地址：修复 iOS 键盘吞冒号、补 scheme、去尾斜杠。
@@ -216,17 +219,25 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
     }
     _urlController.text = url;
 
+    // 本机地址 + 未指定端口 + 内嵌服务已启动：用实际 baseUrl（含端口）
+    // 替换，避免 URL 端口缺失/不匹配导致测试失败。
+    final resolved = await EmbeddedServerUrlResolver.resolve(url);
+    if (resolved != _urlController.text) {
+      _urlController.text = resolved;
+    }
+    final testUrl = _urlController.text;
+
     SmartDialog.showLoading(msg: "正在测试连接...");
     try {
-      final available = await LiveApiFactory.checkServerAvailable(url);
+      final available = await LiveApiFactory.checkServerAvailable(testUrl);
       SmartDialog.dismiss(status: SmartStatus.loading);
       if (available) {
         SmartDialog.showToast("连接成功");
         // 测试成功：将地址持久化并刷新站点列表，使首页/分类/搜索 Tab 即时更新。
         // 用户可能未离开输入框（未触发失焦），这里兜底保证地址生效。
-        if (url != AppSettingsController.instance.serverUrl.value) {
-          AppSettingsController.instance.setServerUrl(url);
-          LiveApiFactory.reset();
+        if (testUrl != AppSettingsController.instance.serverUrl.value) {
+          AppSettingsController.instance.setServerUrl(testUrl);
+          await LiveApiFactory.reset();
         }
         SitesService.instance.fetchRemoteSites();
       } else {
