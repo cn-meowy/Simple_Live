@@ -128,6 +128,10 @@ jobs:
           path: |
             simple_live_app/build/ios/iphoneos/MeowLive-ios-${{ steps.version.outputs.VERSION }}.ipa
 
+      # CI构建前移除macOS签名Team配置，回退ad-hoc签名，避免CI无证书失败
+      - name: Strip macOS signing for CI
+        run: bash scripts/strip_macos_signing.sh
+
       # 打包MAC
       - name: Build MacOS
         run: |
