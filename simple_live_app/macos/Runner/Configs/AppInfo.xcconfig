@@ -12,3 +12,7 @@ PRODUCT_BUNDLE_IDENTIFIER = com.xycz.simpleLiveApp
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2023 com.xycz. All rights reserved.
+
+// Application version managed by Xcode. Keep in sync with simple_live_app/pubspec.yaml.
+MARKETING_VERSION = 0.0.1
+CURRENT_PROJECT_VERSION = 1

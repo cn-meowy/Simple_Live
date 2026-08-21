@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title data-i18n-meta="home.tagline">MeowLive · 技术支持</title>
+  <meta name="description" data-i18n-meta="home.subtitle" content="MeowLive 是一款自建直播服务的播放客户端。" />
+  <link rel="icon" type="image/png" href="assets/img/logo.png" />
+  <link rel="alternate" hreflang="zh-CN" href="index.html" />
+  <link rel="alternate" hreflang="en" href="index.html" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav" aria-label="Primary">
+      <a class="nav-brand" href="index.html">
+        <img src="assets/img/logo.png" alt="MeowLive" />
+        <span>MeowLive</span>
+      </a>
+      <div class="nav-links">
+        <a href="index.html" data-nav-page="index.html" class="active" data-i18n="nav.home">首页</a>
+        <a href="privacy-policy.html" data-nav-protocol="privacy-policy" data-i18n="nav.privacy">隐私政策</a>
+        <a href="user-agreement.html" data-nav-protocol="user-agreement" data-i18n="nav.agreement">用户协议</a>
+      </div>
+      <div class="lang-toggle" role="group" aria-label="Language">
+        <button type="button" data-lang-set="zh" class="active" aria-label="中文"><span data-i18n="lang.zh">中</span></button>
+        <button type="button" data-lang-set="en" aria-label="English"><span data-i18n="lang.en">EN</span></button>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <img src="assets/img/logo.png" alt="MeowLive logo" />
+      <h1>MeowLive</h1>
+      <p data-i18n="home.tagline">自建直播服务的播放客户端</p>
+      <p data-i18n="home.subtitle">连接您自建的直播服务端，本应用作为客户端播放直播流。</p>
+    </section>
+
+    <section class="section">
+      <h2 data-i18n="home.contact.title">技术支持</h2>
+      <p>
+        <strong data-i18n="home.contact.email">邮箱</strong>:
+        <a href="mailto:meowycn@163.com">meowycn@163.com</a>
+      </p>
+    </section>
+
+    <section class="section">
+      <h2 data-i18n="home.legal.title">法律文件</h2>
+      <p>
+        <a href="privacy-policy.html" data-nav-protocol="privacy-policy" data-i18n="nav.privacy">隐私政策</a>
+        ·
+        <a href="user-agreement.html" data-nav-protocol="user-agreement" data-i18n="nav.agreement">用户协议</a>
+      </p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p data-i18n="home.license">本项目以 GPL-3.0 协议开源。</p>
+    <p data-i18n="footer.copy">© 2026 MeowLive · 基于 xiaoyaocz/dart_simple_live fork</p>
+  </footer>
+
+  <script src="assets/js/i18n.js" defer></script>
+  <script src="assets/js/nav.js" defer></script>
+</body>
+</html>

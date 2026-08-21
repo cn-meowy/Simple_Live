@@ -403,19 +403,18 @@ mixin PlayerSystemMixin on PlayerMixin, PlayerStateMixin, PlayerDanmakuMixin {
         SmartDialog.showToast("已保存截图至相册");
       } else {
         //选择保存文件夹
-        var path = await FilePicker.platform.saveFile(
+        var uri = await FilePicker.saveFile(
           allowedExtensions: ["jpg"],
           type: FileType.image,
           fileName: "${DateTime.now().millisecondsSinceEpoch}.jpg",
+          bytes: imageData,
         );
-        if (path == null) {
+        if (uri == null) {
           SmartDialog.showToast("取消保存");
           SmartDialog.dismiss(status: SmartStatus.loading);
           return;
         }
-        var file = File(path);
-        await file.writeAsBytes(imageData);
-        SmartDialog.showToast("已保存截图至${file.path}");
+        SmartDialog.showToast("已保存截图至${uri.toFilePath()}");
       }
     } catch (e) {
       Log.logPrint(e);

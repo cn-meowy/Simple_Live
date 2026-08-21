@@ -249,7 +249,7 @@ class MyApp extends StatelessWidget {
           // 升级后Android页面过渡动画似乎有BUG
           defaultTransition:
               Platform.isAndroid ? Transition.cupertino : null,
-          //debugShowCheckedModeBanner: false,
+          debugShowCheckedModeBanner: false,
           navigatorObservers: [FlutterSmartDialog.observer],
           builder: FlutterSmartDialog.init(
             loadingBuilder: ((msg) => const AppLoaddingWidget()),
@@ -324,7 +324,8 @@ class MyApp extends StatelessWidget {
                     //查看DEBUG日志按钮
                     //只在Debug、Profile模式显示
                     Visibility(
-                      visible: !kReleaseMode,
+                      // visible: !kReleaseMode,
+                      visible: false,
                       child: Positioned(
                         right: 12,
                         bottom:

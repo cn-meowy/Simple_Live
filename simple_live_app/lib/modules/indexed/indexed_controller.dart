@@ -11,6 +11,7 @@ import 'package:simple_live_app/modules/home/home_page.dart';
 import 'package:simple_live_app/modules/follow_user/follow_user_controller.dart';
 import 'package:simple_live_app/modules/follow_user/follow_user_page.dart';
 import 'package:simple_live_app/modules/mine/mine_page.dart';
+import 'package:simple_live_app/modules/settings/server_config_guide_dialog.dart';
 import 'package:simple_live_app/widgets/agreement/agreement_dialog.dart';
 
 class IndexedController extends GetxController {
@@ -61,10 +62,13 @@ class IndexedController extends GetxController {
         .toList();
     setIndex(0);
     super.onInit();
-    if (AppSettingsController.instance.firstRun) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        showAgreementDialog();
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (AppSettingsController.instance.firstRun) {
+        await showAgreementDialog();
+      }
+      if (AppSettingsController.instance.serverUrl.value.trim().isEmpty) {
+        await showServerConfigGuide();
+      }
+    });
   }
 }

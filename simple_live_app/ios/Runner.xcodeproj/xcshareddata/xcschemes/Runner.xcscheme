@@ -10,7 +10,7 @@
             ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
             <ActionContent
                title = "Run Prepare Flutter Framework Script"
-               scriptText = "/bin/sh &quot;$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh&quot; prepare&#10;">
+               scriptText = "/bin/sh &quot;$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh&quot; prepare&#10;# flutter pub get resets the ephemeral SPM manifest platform to iOS 13.0, but file_picker_darwin requires iOS 14.0. Re-apply the project deployment target (mirrors SwiftPackageManager.updateMinimumDeployment) so Xcode builds succeed without running a flutter build command first.&#10;M=&quot;$SRCROOT/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage/Package.swift&quot;&#10;D=${IPHONEOS_DEPLOYMENT_TARGET:-15.0}&#10;if [ -f &quot;$M&quot; ] &amp;&amp; grep -q 'iOS(&quot;13.0&quot;)' &quot;$M&quot; &amp;&amp; [ &quot;$D&quot; != 13.0 ]; then&#10;sed -i '' '/\.iOS(/s/13\.0/'&quot;$D&quot;'/' &quot;$M&quot; || true&#10;fi&#10;">
                <EnvironmentBuildable>
                   <BuildableReference
                      BuildableIdentifier = "primary"
