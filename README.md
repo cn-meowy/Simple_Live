@@ -105,7 +105,7 @@ flutter run
 
 ## 环境
 
-- Flutter：`3.38.x`（见 `.github/workflows/`）
+- Flutter：`3.44.4`（见 `.github/workflows/`）
 - Node.js：`>=22.0.0`（后端 `simple_live_server_nodejs`）
 - Apple TV：Xcode + Swift 5.9+，tvOS 17.0+（见 [simple_live_apple_tv/MeowLive/README.md](simple_live_apple_tv/MeowLive/README.md)）
 
